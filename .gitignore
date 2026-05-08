@@ -1,0 +1,43 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/build
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dashboard
+dashboard-monitoring-bps-kota-jogja/node_modules
+dashboard-monitoring-bps-kota-jogja/.pnp
+dashboard-monitoring-bps-kota-jogja/coverage
+dashboard-monitoring-bps-kota-jogja/build
+dashboard-monitoring-bps-kota-jogja/.env.local
+dashboard-monitoring-bps-kota-jogja/.env.development.local
+dashboard-monitoring-bps-kota-jogja/.env.test.local
+dashboard-monitoring-bps-kota-jogja/.env.production.local
+
+# Backend
+backend-monitoring-bps/node_modules
+backend-monitoring-bps/.env
+
+# Misc
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
