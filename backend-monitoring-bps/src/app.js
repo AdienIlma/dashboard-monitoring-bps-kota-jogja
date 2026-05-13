@@ -13,15 +13,16 @@ const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const pplRoutes = require('./routes/pplRoutes');
 const pmlRoutes = require('./routes/pmlRoutes');
+const wilayahRoutes = require('./routes/wilayahRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/ppl', pplRoutes);
 app.use('/api/pml', pmlRoutes);
+app.use('/api/wilayah', wilayahRoutes);
 
 app.get('/', (req, res) => res.json({ message: 'Backend BPS Monitoring OK' }));
 
-// Error handler Express 5
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ message: err.message });

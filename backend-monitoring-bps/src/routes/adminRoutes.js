@@ -1,14 +1,23 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate, authorize } = require('../middleware/auth');
-const { 
-  getAllUsers, 
-  createUser, 
-  getResponden, 
-  createResponden, 
-  assignResponden,
+
+const {
+  // user
+  getAllUsers,
+  createUser,
+  updateUser,
+  deleteUser,
   getPMLList,
   getPPLByPML,
+
+  // wilayah
+  getWilayah,
+  createWilayah,
+  updateWilayah,
+  deleteWilayah,
+
+  // dashboard
   getDashboardProgress,
   getDashboardPetugas,
   getDashboardKecamatan,
@@ -17,17 +26,25 @@ const {
   getDashboardProgress15Hari,
 } = require('../controllers/adminController');
 
+// Semua route di bawah hanya bisa diakses admin
 router.use(authenticate, authorize('admin'));
 
+// USER MANAGEMENT
 router.get('/users', getAllUsers);
 router.post('/users', createUser);
+router.put('/users/:id', updateUser);
+router.delete('/users/:id', deleteUser);
+
 router.get('/users/pml', getPMLList);
 router.get('/users/pml/:id/ppl', getPPLByPML);
-router.get('/responden', getResponden);
-router.post('/responden', createResponden);
-router.put('/responden/:id/assign', assignResponden);
 
-// dashboard endpoints
+// WILAYAH MANAGEMENT
+router.get('/wilayah', getWilayah);
+router.post('/wilayah', createWilayah);
+router.put('/wilayah/:id', updateWilayah);
+router.delete('/wilayah/:id', deleteWilayah);
+
+// DASHBOARD ENDPOINTS
 router.get('/dashboard/progress', getDashboardProgress);
 router.get('/dashboard/petugas', getDashboardPetugas);
 router.get('/dashboard/kecamatan', getDashboardKecamatan);

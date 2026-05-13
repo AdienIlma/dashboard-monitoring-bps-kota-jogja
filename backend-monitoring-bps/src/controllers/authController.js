@@ -27,6 +27,10 @@ const login = async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
 
+    await pool.query(
+    'UPDATE users SET is_logged_in = TRUE WHERE id = $1',
+    [user.id]
+    );
     res.json({ token, role: user.role, nama: user.nama });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -35,7 +39,10 @@ const login = async (req, res) => {
 
 const logout = async (req, res) => {
   try {
-    await pool.query('DELETE FROM lokasi WHERE user_id = $1', [req.user.id]);
+    await pool.query(
+  'UPDATE users SET is_logged_in = FALSE WHERE id = $1',
+  [req.user.id]
+);
     res.json({ message: 'Logout berhasil' });
   } catch (err) {
     res.status(500).json({ message: 'Gagal logout', error: err.message });

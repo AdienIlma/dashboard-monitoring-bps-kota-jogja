@@ -1,39 +1,48 @@
 const pool = require('../config/db');
 
 const getMyPPL = async (req, res) => {
-  const result = await pool.query('SELECT id, nama, username FROM users WHERE pml_id = $1', [req.user.id]);
-  res.json(result.rows);
-};
-
-const getSubmissions = async (req, res) => {
-  const result = await pool.query(`
-    SELECT s.*, r.nama_kepala_keluarga, r.alamat, u.nama as nama_ppl
-    FROM submissions s
-    JOIN responden r ON s.responden_id = r.id
-    JOIN users u ON s.ppl_id = u.id
-    WHERE u.pml_id = $1
-    ORDER BY s.submitted_at DESC
-  `, [req.user.id]);
-  res.json(result.rows);
-};
-
-const reviewSubmission = async (req, res) => {
-  const { id } = req.params;
-  const { status, catatan_pml } = req.body; // status: 'approved' atau 'ditolak'
   try {
     const result = await pool.query(`
-      UPDATE submissions 
-      SET status = $1, catatan_pml = $2, reviewed_by = $3, reviewed_at = NOW()
-      WHERE id = $4 RETURNING *
-    `, [status, catatan_pml || null, req.user.id, id]);
-
-    // update status responden juga
-    await pool.query('UPDATE responden SET status = $1 WHERE id = $2',
-      [status, result.rows[0].responden_id]);
-
-    res.json(result.rows[0]);
+      SELECT 
+        u.id, u.nama, u.username,
+        COALESCE(SUM(i.ke_lapangan), 0) as total_ke_lapangan,
+        COALESCE(SUM(i.submit), 0) as total_submit,
+        COALESCE(SUM(i.approve), 0) as total_approve,
+        COUNT(i.id) as total_input
+      FROM users u
+      LEFT JOIN input_harian i ON i.ppl_id = u.id
+      WHERE u.pml_id = $1
+      GROUP BY u.id, u.nama, u.username
+      ORDER BY u.nama
+    `, [req.user.id]);
+    res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ message: 'Gagal review', error: err.message });
+    res.status(500).json({ message: 'Gagal ambil PPL', error: err.message });
+  }
+};
+
+const getInputsByPPL = async (req, res) => {
+  const { ppl_id } = req.params;
+  try {
+    // validasi PPL di bawah PML ini
+    const cek = await pool.query(
+      'SELECT id FROM users WHERE id = $1 AND pml_id = $2',
+      [ppl_id, req.user.id]
+    );
+    if (cek.rows.length === 0) {
+      return res.status(403).json({ message: 'PPL tidak di bawah anda' });
+    }
+
+    const result = await pool.query(`
+      SELECT i.*, w.kecamatan, w.kelurahan
+      FROM input_harian i
+      JOIN wilayah w ON i.wilayah_id = w.id
+      WHERE i.ppl_id = $1
+      ORDER BY i.created_at DESC
+    `, [ppl_id]);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ message: 'Gagal ambil data', error: err.message });
   }
 };
 
@@ -50,4 +59,4 @@ const kirimLokasi = async (req, res) => {
   }
 };
 
-module.exports = { getMyPPL, getSubmissions, reviewSubmission, kirimLokasi };
+module.exports = { getMyPPL, getInputsByPPL, kirimLokasi };

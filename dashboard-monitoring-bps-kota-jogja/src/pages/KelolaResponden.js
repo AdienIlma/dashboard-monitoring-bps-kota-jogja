@@ -2,281 +2,537 @@ import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 
 const KelolaResponden = () => {
-  const [responden, setResponden] = useState([]);
-  const [pplList, setPplList] = useState([]);
+  const [wilayah, setWilayah] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ nama_kepala_keluarga: '', alamat: '', kecamatan: '', kelurahan: '' });
-  const [pesan, setPesan] = useState({ text: '', type: '' });
-  const [assignTarget, setAssignTarget] = useState(null);
-  const [assignPPL, setAssignPPL] = useState('');
-  const [filterStatus, setFilterStatus] = useState('semua');
+  const [kecamatanBaru, setKecamatanBaru] = useState('');
+  const [expanded, setExpanded] = useState({});
+  const [addingKelurahan, setAddingKelurahan] = useState(null);
+  const [namaKelurahan, setNamaKelurahan] = useState('');
   const [search, setSearch] = useState('');
+  const [pesan, setPesan] = useState({ text: '', type: '' });
+
+  // Edit states
+  const [editingKecamatan, setEditingKecamatan] = useState(null);
+  const [editNamaKecamatan, setEditNamaKecamatan] = useState('');
+  const [editingKelurahan, setEditingKelurahan] = useState(null);
+  const [editNamaKelurahan, setEditNamaKelurahan] = useState('');
 
   useEffect(() => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (pesan.text) {
+      const t = setTimeout(() => setPesan({ text: '', type: '' }), 3500);
+      return () => clearTimeout(t);
+    }
+  }, [pesan]);
+
   const fetchData = async () => {
     try {
-      const [res, ppl] = await Promise.all([
-        api.get('/admin/responden'),
-        api.get('/admin/users'),
-      ]);
-      setResponden(res.data);
-      setPplList(ppl.data.filter(u => u.role === 'ppl'));
+      const res = await api.get('/admin/wilayah');
+      setWilayah(res.data);
     } catch (err) {
-      console.error('Gagal ambil data', err);
+      console.error('Gagal ambil data wilayah', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleTambah = async (e) => {
+  const grouped = wilayah.reduce((acc, item) => {
+    if (!acc[item.kecamatan]) acc[item.kecamatan] = [];
+    acc[item.kecamatan].push(item);
+    return acc;
+  }, {});
+
+  const filteredKecamatan = Object.keys(grouped).filter((kec) =>
+    kec.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const showPesan = (text, type) => setPesan({ text, type });
+
+  // ── TAMBAH KECAMATAN ────────────────────────────────────────────────
+  const handleTambahKecamatan = async (e) => {
     e.preventDefault();
-    setPesan({ text: '', type: '' });
+    if (!kecamatanBaru.trim()) return;
     try {
-      await api.post('/admin/responden', form);
-      setPesan({ text: '✅ Responden berhasil ditambahkan!', type: 'success' });
-      setForm({ nama_kepala_keluarga: '', alamat: '', kecamatan: '', kelurahan: '' });
-      setShowForm(false);
+      await api.post('/admin/wilayah', {
+        kecamatan: kecamatanBaru,
+        kelurahan: kecamatanBaru,
+      });
+      showPesan('Kecamatan berhasil ditambahkan!', 'success');
+      setKecamatanBaru('');
       fetchData();
     } catch (err) {
-      setPesan({ text: '❌ ' + (err.response?.data?.message || 'Gagal tambah'), type: 'error' });
+      showPesan(err.response?.data?.message || 'Gagal tambah kecamatan', 'error');
     }
   };
 
-  const handleAssign = async (id) => {
-    if (!assignPPL) return;
+  // ── EDIT KECAMATAN ──────────────────────────────────────────────────
+  const handleEditKecamatan = async (oldKecamatan) => {
+    if (!editNamaKecamatan.trim() || editNamaKecamatan === oldKecamatan) {
+      setEditingKecamatan(null);
+      return;
+    }
     try {
-      await api.put(`/admin/responden/${id}/assign`, { ppl_id: assignPPL });
-      setPesan({ text: '✅ Berhasil di-assign!', type: 'success' });
-      setAssignTarget(null);
-      setAssignPPL('');
+      const items = grouped[oldKecamatan];
+      for (const item of items) {
+        await api.put(`/admin/wilayah/${item.id}`, {
+          kecamatan: editNamaKecamatan,
+          kelurahan: item.kelurahan === item.kecamatan ? editNamaKecamatan : item.kelurahan,
+        });
+      }
+      showPesan('Kecamatan berhasil diperbarui!', 'success');
+      setEditingKecamatan(null);
+      setEditNamaKecamatan('');
       fetchData();
     } catch (err) {
-      setPesan({ text: '❌ ' + (err.response?.data?.message || 'Gagal assign'), type: 'error' });
+      showPesan(err.response?.data?.message || 'Gagal edit kecamatan', 'error');
     }
   };
 
-  const statusColor = (status) => {
-    switch (status) {
-      case 'belum': return { bg: '#f1f5f9', color: '#64748b' };
-      case 'sudah_lapangan': return { bg: '#fef3c7', color: '#f59e0b' };
-      case 'submitted': return { bg: '#dbeafe', color: '#3b82f6' };
-      case 'approved': return { bg: '#dcfce7', color: '#22c55e' };
-      case 'ditolak': return { bg: '#fee2e2', color: '#ef4444' };
-      default: return { bg: '#f1f5f9', color: '#64748b' };
+  // ── TAMBAH KELURAHAN ────────────────────────────────────────────────
+  const handleTambahKelurahan = async (kecamatan) => {
+    if (!namaKelurahan.trim()) return;
+    try {
+      await api.post('/admin/wilayah', { kecamatan, kelurahan: namaKelurahan });
+      showPesan('Kelurahan berhasil ditambahkan!', 'success');
+      setNamaKelurahan('');
+      setAddingKelurahan(null);
+      fetchData();
+    } catch (err) {
+      showPesan(err.response?.data?.message || 'Gagal tambah kelurahan', 'error');
     }
   };
 
-  const statusLabel = (status) => {
-    switch (status) {
-      case 'belum': return 'Belum';
-      case 'sudah_lapangan': return 'Di Lapangan';
-      case 'submitted': return 'Submit';
-      case 'approved': return 'Approved';
-      case 'ditolak': return 'Ditolak';
-      default: return status;
+  // ── EDIT KELURAHAN ──────────────────────────────────────────────────
+  const handleEditKelurahan = async (item) => {
+    if (!editNamaKelurahan.trim() || editNamaKelurahan === item.kelurahan) {
+      setEditingKelurahan(null);
+      return;
+    }
+    try {
+      await api.put(`/admin/wilayah/${item.id}`, {
+        kecamatan: item.kecamatan,
+        kelurahan: editNamaKelurahan,
+      });
+      showPesan('Kelurahan berhasil diperbarui!', 'success');
+      setEditingKelurahan(null);
+      setEditNamaKelurahan('');
+      fetchData();
+    } catch (err) {
+      showPesan(err.response?.data?.message || 'Gagal edit kelurahan', 'error');
     }
   };
 
-  const filtered = responden.filter(r => {
-    const matchStatus = filterStatus === 'semua' || r.status === filterStatus;
-    const matchSearch = !search || r.nama_kepala_keluarga.toLowerCase().includes(search.toLowerCase()) || r.alamat.toLowerCase().includes(search.toLowerCase());
-    return matchStatus && matchSearch;
-  });
-
-  const counts = {
-    semua: responden.length,
-    belum: responden.filter(r => r.status === 'belum').length,
-    sudah_lapangan: responden.filter(r => r.status === 'sudah_lapangan').length,
-    submitted: responden.filter(r => r.status === 'submitted').length,
-    approved: responden.filter(r => r.status === 'approved').length,
+  // ── HAPUS KELURAHAN ─────────────────────────────────────────────────
+  const handleDeleteKelurahan = async (item) => {
+    if (!window.confirm(`Hapus kelurahan "${item.kelurahan}"?`)) return;
+    try {
+      await api.delete(`/admin/wilayah/${item.id}`);
+      showPesan('Kelurahan berhasil dihapus!', 'success');
+      fetchData();
+    } catch (err) {
+      showPesan(err.response?.data?.message || 'Gagal hapus kelurahan', 'error');
+    }
   };
+
+  // ── HAPUS KECAMATAN ─────────────────────────────────────────────────
+  const handleDeleteKecamatan = async (kecamatan) => {
+    if (!window.confirm(`Hapus kecamatan "${kecamatan}" beserta seluruh kelurahannya?`)) return;
+    try {
+      for (const item of grouped[kecamatan]) {
+        await api.delete(`/admin/wilayah/${item.id}`);
+      }
+      showPesan('Kecamatan berhasil dihapus!', 'success');
+      fetchData();
+    } catch (err) {
+      showPesan(err.response?.data?.message || 'Gagal hapus kecamatan', 'error');
+    }
+  };
+
+  const totalKecamatan = Object.keys(grouped).length;
+  const totalKelurahan = wilayah.filter((k) => k.kelurahan !== k.kecamatan).length;
 
   return (
-    <div style={styles.container}>
-      {/* Stats */}
-      <div style={styles.statsRow}>
-        {[
-          { label: 'Total', val: counts.semua, color: '#1e3a5f' },
-          { label: 'Belum', val: counts.belum, color: '#94a3b8' },
-          { label: 'Di Lapangan', val: counts.sudah_lapangan, color: '#f59e0b' },
-          { label: 'Submit', val: counts.submitted, color: '#3b82f6' },
-          { label: 'Approved', val: counts.approved, color: '#22c55e' },
-        ].map(s => (
-          <div key={s.label} style={styles.statCard}>
-            <div style={{ ...styles.statNum, color: s.color }}>{s.val}</div>
-            <div style={styles.statLabel}>{s.label}</div>
-          </div>
-        ))}
-      </div>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-      {/* Pesan */}
-      {pesan.text && (
-        <div style={{ ...styles.pesan, backgroundColor: pesan.type === 'success' ? '#dcfce7' : '#fee2e2', color: pesan.type === 'success' ? '#16a34a' : '#dc2626' }}>
-          {pesan.text}
-        </div>
-      )}
+        .kelola-wrap * { box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; }
 
-      {/* Filter + Search + Tombol */}
-      <div style={styles.toolbar}>
-        <div style={styles.tabs}>
-          {[['semua', 'Semua'], ['belum', 'Belum'], ['sudah_lapangan', 'Lapangan'], ['submitted', 'Submit'], ['approved', 'Approved']].map(([val, label]) => (
-            <button key={val} onClick={() => setFilterStatus(val)} style={{ ...styles.tab, ...(filterStatus === val ? styles.tabActive : {}) }}>
-              {label}
-            </button>
-          ))}
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            type="text"
-            placeholder="🔍 Cari nama/alamat..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={styles.searchInput}
-          />
-          <button onClick={() => setShowForm(!showForm)} style={styles.addBtn}>
-            {showForm ? '✕ Batal' : '+ Tambah'}
-          </button>
-        </div>
-      </div>
+        .kelola-wrap { padding: 24px; background: #f0f4f8; min-height: 100vh; }
 
-      {/* Form Tambah */}
-      {showForm && (
-        <div style={styles.formCard}>
-          <h4 style={styles.formTitle}>Tambah Responden Baru</h4>
-          <form onSubmit={handleTambah}>
-            <div style={styles.formGrid}>
-              <div style={{ ...styles.field, gridColumn: '1 / -1' }}>
-                <label style={styles.label}>Nama Kepala Keluarga</label>
-                <input style={styles.input} type="text" placeholder="Nama KK" value={form.nama_kepala_keluarga} onChange={e => setForm({ ...form, nama_kepala_keluarga: e.target.value })} required />
-              </div>
-              <div style={{ ...styles.field, gridColumn: '1 / -1' }}>
-                <label style={styles.label}>Alamat</label>
-                <input style={styles.input} type="text" placeholder="Alamat lengkap" value={form.alamat} onChange={e => setForm({ ...form, alamat: e.target.value })} required />
-              </div>
-              <div style={styles.field}>
-                <label style={styles.label}>Kecamatan</label>
-                <input style={styles.input} type="text" placeholder="Kecamatan" value={form.kecamatan} onChange={e => setForm({ ...form, kecamatan: e.target.value })} />
-              </div>
-              <div style={styles.field}>
-                <label style={styles.label}>Kelurahan</label>
-                <input style={styles.input} type="text" placeholder="Kelurahan" value={form.kelurahan} onChange={e => setForm({ ...form, kelurahan: e.target.value })} />
-              </div>
+        /* ── Stat cards ── */
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
+        .stat-card {
+          background: white; border-radius: 16px; padding: 20px 22px;
+          box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 4px 12px rgba(0,0,0,.04);
+          display: flex; align-items: center; gap: 16px;
+        }
+        .stat-icon {
+          width: 46px; height: 46px; border-radius: 12px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 20px; flex-shrink: 0;
+        }
+        .stat-icon.blue { background: #eff6ff; }
+        .stat-icon.green { background: #f0fdf4; }
+        .stat-num { font-size: 26px; font-weight: 800; color: #0f172a; line-height: 1; }
+        .stat-label { font-size: 12px; color: #64748b; margin-top: 3px; font-weight: 500; }
+
+        /* ── Toast ── */
+        .toast {
+          display: flex; align-items: center; gap: 10px;
+          padding: 12px 16px; border-radius: 12px; margin-bottom: 18px;
+          font-size: 13px; font-weight: 600; animation: slideIn .25s ease;
+        }
+        .toast.success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+        .toast.error   { background: #fff1f2; color: #be123c; border: 1px solid #fecdd3; }
+        @keyframes slideIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+
+        /* ── Form card ── */
+        .form-card {
+          background: white; border-radius: 16px; padding: 20px 22px;
+          margin-bottom: 18px; box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 4px 12px rgba(0,0,0,.04);
+        }
+        .form-card h4 { margin: 0 0 14px; font-size: 13px; font-weight: 700; color: #1e3a5f; text-transform: uppercase; letter-spacing: .5px; }
+        .form-row { display: flex; gap: 10px; }
+
+        /* ── Inputs ── */
+        .inp {
+          padding: 9px 13px; border: 1.5px solid #e2e8f0; border-radius: 10px;
+          font-size: 13px; outline: none; transition: border .2s, box-shadow .2s;
+          font-family: inherit;
+        }
+        .inp:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
+
+        /* ── Search bar ── */
+        .search-bar { position: relative; margin-bottom: 16px; }
+        .search-bar .inp { width: 100%; padding-left: 38px; }
+        .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 15px; pointer-events: none; }
+
+        /* ── Table ── */
+        .table-card {
+          background: white; border-radius: 16px; overflow: hidden;
+          box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 4px 12px rgba(0,0,0,.04);
+        }
+        table { width: 100%; border-collapse: collapse; }
+        thead tr { background: #f8fafc; }
+        th {
+          padding: 11px 16px; font-size: 11px; font-weight: 700; color: #94a3b8;
+          text-align: left; text-transform: uppercase; letter-spacing: .6px;
+          border-bottom: 1px solid #f1f5f9;
+        }
+        td { padding: 12px 16px; font-size: 13px; color: #334155; vertical-align: middle; }
+        .kec-row { border-bottom: 1px solid #f1f5f9; transition: background .15s; }
+        .kec-row:hover { background: #fafbfc; }
+        .kec-name { font-weight: 700; color: #0f172a; font-size: 14px; }
+
+        /* ── Badges ── */
+        .badge-count {
+          display: inline-flex; align-items: center; justify-content: center;
+          padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 700;
+          background: #eff6ff; color: #2563eb;
+        }
+
+        /* ── Buttons ── */
+        .btn { padding: 6px 14px; border-radius: 8px; border: none; cursor: pointer; font-size: 12px; font-weight: 600; transition: filter .15s, transform .1s; font-family: inherit; }
+        .btn:hover { filter: brightness(.94); }
+        .btn:active { transform: scale(.97); }
+        .btn-primary { background: #1e3a5f; color: white; padding: 9px 18px; font-size: 13px; border-radius: 10px; }
+        .btn-view    { background: #eff6ff; color: #2563eb; }
+        .btn-add-kel { background: #f0fdf4; color: #15803d; }
+        .btn-edit    { background: #faf5ff; color: #7c3aed; }
+        .btn-delete  { background: #fff1f2; color: #be123c; }
+        .btn-save    { background: #1e3a5f; color: white; }
+        .btn-cancel  { background: #f1f5f9; color: #64748b; }
+
+        /* ── Action group ── */
+        .actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+        /* ── Expand panel ── */
+        .expand-panel { background: #f8fafc; padding: 14px 20px; border-bottom: 1px solid #f1f5f9; }
+        .expand-panel-inner { max-width: 520px; }
+
+        /* ── Add kel form ── */
+        .add-kel-form { display: flex; gap: 8px; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px dashed #e2e8f0; }
+
+        /* ── Kelurahan list ── */
+        .kel-item {
+          display: flex; justify-content: space-between; align-items: center;
+          padding: 9px 0; border-bottom: 1px solid #f1f5f9; gap: 10px;
+        }
+        .kel-item:last-child { border-bottom: none; }
+        .kel-name { font-size: 13px; color: #334155; display: flex; align-items: center; gap: 7px; }
+        .kel-dot { width: 6px; height: 6px; border-radius: 50%; background: #94a3b8; flex-shrink: 0; }
+
+        /* ── Inline edit form ── */
+        .inline-edit { display: flex; gap: 6px; align-items: center; flex: 1; }
+        .inline-edit .inp { flex: 1; padding: 6px 10px; font-size: 12px; }
+
+        /* ── Edit kecamatan row ── */
+        .edit-kec-wrap { display: flex; gap: 8px; align-items: center; }
+        .edit-kec-wrap .inp { font-size: 14px; font-weight: 700; flex: 1; }
+
+        /* ── Empty ── */
+        .empty-cell { text-align: center; padding: 44px; color: #cbd5e1; font-size: 13px; }
+
+        /* ── Loading skeleton ── */
+        .skeleton { background: linear-gradient(90deg,#f1f5f9 25%,#e8edf2 50%,#f1f5f9 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 8px; height: 14px; }
+        @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+      `}</style>
+
+      <div className="kelola-wrap">
+
+        {/* ── Stat Cards ── */}
+        <div className="stat-grid">
+          <div className="stat-card">
+            <div className="stat-icon blue">🏙️</div>
+            <div>
+              <div className="stat-num">{totalKecamatan}</div>
+              <div className="stat-label">Total Kecamatan</div>
             </div>
-            <button type="submit" style={styles.submitBtn}>Simpan Responden</button>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon green">🏘️</div>
+            <div>
+              <div className="stat-num">{totalKelurahan}</div>
+              <div className="stat-label">Total Kelurahan</div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Toast ── */}
+        {pesan.text && (
+          <div className={`toast ${pesan.type}`}>
+            {pesan.type === 'success' ? '✅' : '❌'} {pesan.text}
+          </div>
+        )}
+
+        {/* ── Form Tambah Kecamatan ── */}
+        <div className="form-card">
+          <h4>Tambah Kecamatan</h4>
+          <form onSubmit={handleTambahKecamatan} className="form-row">
+            <input
+              className="inp"
+              style={{ flex: 1 }}
+              type="text"
+              placeholder="Nama kecamatan baru..."
+              value={kecamatanBaru}
+              onChange={(e) => setKecamatanBaru(e.target.value)}
+              required
+            />
+            <button type="submit" className="btn btn-primary">+ Tambah</button>
           </form>
         </div>
-      )}
 
-      {/* Tabel */}
-      <div style={styles.tableWrap}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>Nama KK</th>
-              <th style={styles.th}>Alamat</th>
-              <th style={styles.th}>Wilayah</th>
-              <th style={styles.th}>PPL</th>
-              <th style={styles.th}>Status</th>
-              <th style={styles.th}>Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan="6" style={styles.empty}>Memuat data...</td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan="6" style={styles.empty}>Tidak ada data</td></tr>
-            ) : (
-              filtered.map(r => (
-                <React.Fragment key={r.id}>
-                  <tr style={styles.tr}>
-                    <td style={styles.td}><strong>{r.nama_kepala_keluarga}</strong></td>
-                    <td style={styles.td}>{r.alamat}</td>
-                    <td style={styles.td}>{r.kelurahan ? `${r.kelurahan}, ${r.kecamatan}` : '-'}</td>
-                    <td style={styles.td}>{r.nama_ppl || <span style={{ color: '#94a3b8' }}>Belum assign</span>}</td>
-                    <td style={styles.td}>
-                      <span style={{ ...styles.badge, backgroundColor: statusColor(r.status).bg, color: statusColor(r.status).color }}>
-                        {statusLabel(r.status)}
-                      </span>
-                    </td>
-                    <td style={styles.td}>
-                      {r.status === 'belum' && (
-                        <button
-                          onClick={() => setAssignTarget(assignTarget === r.id ? null : r.id)}
-                          style={styles.assignBtn}
-                        >
-                          {assignTarget === r.id ? '✕ Batal' : '👤 Assign'}
-                        </button>
+        {/* ── Search ── */}
+        <div className="search-bar">
+          <span className="search-icon">🔍</span>
+          <input
+            className="inp"
+            type="text"
+            placeholder="Cari kecamatan..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        {/* ── Table ── */}
+        <div className="table-card">
+          <table>
+            <thead>
+              <tr>
+                <th>Kecamatan</th>
+                <th>Kelurahan</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan="3" className="empty-cell">Memuat data...</td>
+                </tr>
+              ) : filteredKecamatan.length === 0 ? (
+                <tr>
+                  <td colSpan="3" className="empty-cell">Tidak ada data kecamatan</td>
+                </tr>
+              ) : (
+                filteredKecamatan.map((kecamatan) => {
+                  const kelurahanList = grouped[kecamatan];
+                  const realKelurahan = kelurahanList.filter((k) => k.kelurahan !== k.kecamatan);
+                  const isExpanded = expanded[kecamatan];
+                  const isEditingKec = editingKecamatan === kecamatan;
+
+                  return (
+                    <React.Fragment key={kecamatan}>
+                      <tr className="kec-row">
+                        {/* Nama Kecamatan */}
+                        <td>
+                          {isEditingKec ? (
+                            <div className="edit-kec-wrap">
+                              <input
+                                autoFocus
+                                className="inp"
+                                value={editNamaKecamatan}
+                                onChange={(e) => setEditNamaKecamatan(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleEditKecamatan(kecamatan);
+                                  if (e.key === 'Escape') setEditingKecamatan(null);
+                                }}
+                              />
+                              <button className="btn btn-save" onClick={() => handleEditKecamatan(kecamatan)}>Simpan</button>
+                              <button className="btn btn-cancel" onClick={() => setEditingKecamatan(null)}>Batal</button>
+                            </div>
+                          ) : (
+                            <span className="kec-name">{kecamatan}</span>
+                          )}
+                        </td>
+
+                        {/* Badge jumlah kelurahan */}
+                        <td>
+                          <span className="badge-count">{realKelurahan.length}</span>
+                        </td>
+
+                        {/* Aksi */}
+                        <td>
+                          <div className="actions">
+                            <button
+                              className="btn btn-view"
+                              onClick={() =>
+                                setExpanded((prev) => ({ ...prev, [kecamatan]: !prev[kecamatan] }))
+                              }
+                            >
+                              {isExpanded ? '▲ Tutup' : '▼ Lihat'}
+                            </button>
+
+                            <button
+                              className="btn btn-add-kel"
+                              onClick={() => {
+                                setAddingKelurahan(kecamatan);
+                                setExpanded((prev) => ({ ...prev, [kecamatan]: true }));
+                              }}
+                            >
+                              + Kelurahan
+                            </button>
+
+                            <button
+                              className="btn btn-edit"
+                              onClick={() => {
+                                setEditingKecamatan(kecamatan);
+                                setEditNamaKecamatan(kecamatan);
+                              }}
+                            >
+                              ✏️ Edit
+                            </button>
+
+                            <button
+                              className="btn btn-delete"
+                              onClick={() => handleDeleteKecamatan(kecamatan)}
+                            >
+                              🗑 Hapus
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* ── Expanded Panel ── */}
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan="3" style={{ padding: 0 }}>
+                            <div className="expand-panel">
+                              <div className="expand-panel-inner">
+
+                                {/* Form tambah kelurahan */}
+                                {addingKelurahan === kecamatan && (
+                                  <div className="add-kel-form">
+                                    <input
+                                      autoFocus
+                                      className="inp"
+                                      style={{ flex: 1 }}
+                                      placeholder="Nama kelurahan baru..."
+                                      value={namaKelurahan}
+                                      onChange={(e) => setNamaKelurahan(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleTambahKelurahan(kecamatan);
+                                        if (e.key === 'Escape') setAddingKelurahan(null);
+                                      }}
+                                    />
+                                    <button className="btn btn-save" onClick={() => handleTambahKelurahan(kecamatan)}>Simpan</button>
+                                    <button className="btn btn-cancel" onClick={() => setAddingKelurahan(null)}>Batal</button>
+                                  </div>
+                                )}
+
+                                {/* List kelurahan */}
+                                {realKelurahan.length === 0 ? (
+                                  <div style={{ color: '#94a3b8', fontSize: 13, padding: '6px 0' }}>
+                                    Belum ada kelurahan. Klik <strong>+ Kelurahan</strong> untuk menambah.
+                                  </div>
+                                ) : (
+                                  realKelurahan.map((item) => {
+                                    const isEditingKel = editingKelurahan === item.id;
+                                    return (
+                                      <div className="kel-item" key={item.id}>
+                                        {isEditingKel ? (
+                                          <div className="inline-edit">
+                                            <input
+                                              autoFocus
+                                              className="inp"
+                                              value={editNamaKelurahan}
+                                              onChange={(e) => setEditNamaKelurahan(e.target.value)}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Enter') handleEditKelurahan(item);
+                                                if (e.key === 'Escape') setEditingKelurahan(null);
+                                              }}
+                                            />
+                                            <button className="btn btn-save" onClick={() => handleEditKelurahan(item)}>Simpan</button>
+                                            <button className="btn btn-cancel" onClick={() => setEditingKelurahan(null)}>Batal</button>
+                                          </div>
+                                        ) : (
+                                          <span className="kel-name">
+                                            <span className="kel-dot" />
+                                            {item.kelurahan}
+                                          </span>
+                                        )}
+
+                                        {!isEditingKel && (
+                                          <div className="actions">
+                                            <button
+                                              className="btn btn-edit"
+                                              onClick={() => {
+                                                setEditingKelurahan(item.id);
+                                                setEditNamaKelurahan(item.kelurahan);
+                                              }}
+                                            >
+                                              ✏️ Edit
+                                            </button>
+                                            <button
+                                              className="btn btn-delete"
+                                              onClick={() => handleDeleteKelurahan(item)}
+                                            >
+                                              🗑 Hapus
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                  </tr>
-                  {/* Row assign PPL */}
-                  {assignTarget === r.id && (
-                    <tr style={{ backgroundColor: '#f8fafc' }}>
-                      <td colSpan="6" style={{ padding: '8px 14px' }}>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <select
-                            value={assignPPL}
-                            onChange={e => setAssignPPL(e.target.value)}
-                            style={{ ...styles.input, flex: 1, margin: 0 }}
-                          >
-                            <option value="">Pilih PPL</option>
-                            {pplList.map(p => (
-                              <option key={p.id} value={p.id}>{p.nama}</option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={() => handleAssign(r.id)}
-                            disabled={!assignPPL}
-                            style={{ ...styles.submitBtn, padding: '8px 16px' }}
-                          >
-                            Simpan
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              ))
-            )}
-          </tbody>
-        </table>
+                    </React.Fragment>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </>
   );
-};
-
-const styles = {
-  container: { padding: '1.5rem', height: '100%', overflowY: 'auto' },
-  statsRow: { display: 'flex', gap: 12, marginBottom: 20 },
-  statCard: { flex: 1, backgroundColor: 'white', borderRadius: 12, padding: '1rem', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  statNum: { fontSize: 24, fontWeight: 800 },
-  statLabel: { fontSize: 11, color: '#64748b', marginTop: 4 },
-  pesan: { padding: '10px 16px', borderRadius: 8, marginBottom: 16, fontWeight: 600, fontSize: 13 },
-  toolbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 },
-  tabs: { display: 'flex', gap: 4, background: '#f1f5f9', borderRadius: 8, padding: 3 },
-  tab: { padding: '6px 12px', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: 'transparent', color: '#64748b' },
-  tabActive: { background: '#1e3a5f', color: 'white' },
-  searchInput: { padding: '7px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', width: 200 },
-  addBtn: { padding: '8px 16px', backgroundColor: '#1e3a5f', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' },
-  formCard: { backgroundColor: 'white', borderRadius: 12, padding: '1.5rem', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  formTitle: { margin: '0 0 1rem 0', color: '#1e3a5f', fontSize: 14 },
-  formGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 },
-  field: { display: 'flex', flexDirection: 'column', gap: 4 },
-  label: { fontSize: 12, fontWeight: 600, color: '#374151' },
-  input: { padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, outline: 'none' },
-  submitBtn: { padding: '10px 24px', backgroundColor: '#1e3a5f', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' },
-  tableWrap: { backgroundColor: 'white', borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  table: { width: '100%', borderCollapse: 'collapse' },
-  th: { padding: '10px 14px', background: '#f8fafc', fontSize: 11, fontWeight: 700, color: '#64748b', textAlign: 'left', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' },
-  tr: { borderBottom: '1px solid #f1f5f9' },
-  td: { padding: '10px 14px', fontSize: 13, color: '#334155' },
-  badge: { padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 },
-  assignBtn: { padding: '5px 12px', backgroundColor: '#eef2ff', color: '#6366f1', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' },
-  empty: { textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 },
 };
 
 export default KelolaResponden;

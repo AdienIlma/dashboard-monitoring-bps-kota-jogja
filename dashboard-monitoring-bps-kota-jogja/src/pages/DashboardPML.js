@@ -4,18 +4,42 @@ import api from '../services/api';
 
 const DashboardPML = () => {
   const { user, logout } = useAuth();
-  const [submissions, setSubmissions] = useState([]);
+  const [pplList, setPplList] = useState([]);
+  const [selectedPPL, setSelectedPPL] = useState(null);
+  const [inputs, setInputs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [reviewLoading, setReviewLoading] = useState(null);
-  const [catatan, setCatatan] = useState({});
-  const [pesan, setPesan] = useState('');
 
   useEffect(() => {
-    fetchSubmissions();
+    fetchPPL();
     kirimLokasiOtomatis();
     const interval = setInterval(kirimLokasiOtomatis, 10 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const fetchPPL = async () => {
+    try {
+      const res = await api.get('/pml/ppl');
+      setPplList(res.data);
+    } catch (err) {
+      console.error('Gagal fetch PPL', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchInputs = async (ppl_id) => {
+    try {
+      const res = await api.get(`/pml/inputs/${ppl_id}`);
+      setInputs(res.data);
+    } catch (err) {
+      console.error('Gagal fetch inputs', err);
+    }
+  };
+
+  const handleSelectPPL = (ppl) => {
+    setSelectedPPL(ppl);
+    fetchInputs(ppl.id);
+  };
 
   const kirimLokasiOtomatis = () => {
     if (!navigator.geolocation) return;
@@ -26,188 +50,165 @@ const DashboardPML = () => {
           longitude: pos.coords.longitude,
         });
       } catch (err) {
-        console.error('Gagal kirim lokasi PML', err);
+        console.error('Gagal kirim lokasi', err);
       }
     });
   };
 
-  const fetchSubmissions = async () => {
-    try {
-      const res = await api.get('/pml/submissions');
-      setSubmissions(res.data);
-    } catch (err) {
-      console.error('Gagal ambil data', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleReview = async (id, status) => {
-    setReviewLoading(id + status);
-    setPesan('');
-    try {
-      await api.put(`/pml/submissions/${id}/review`, {
-        status,
-        catatan_pml: catatan[id] || '',
-      });
-      setPesan(status === 'approved' ? '✅ Submission disetujui!' : '❌ Submission ditolak!');
-      fetchSubmissions();
-    } catch (err) {
-      setPesan('Gagal: ' + (err.response?.data?.message || 'Error'));
-    } finally {
-      setReviewLoading(null);
-    }
-  };
-
-  const statusColor = (status) => {
-    switch (status) {
-      case 'pending': return '#f59e0b';
-      case 'approved': return '#22c55e';
-      case 'ditolak': return '#ef4444';
-      default: return '#94a3b8';
-    }
-  };
-
-  const statusLabel = (status) => {
-    switch (status) {
-      case 'pending': return 'Menunggu';
-      case 'approved': return 'Disetujui';
-      case 'ditolak': return 'Ditolak';
-      default: return status;
-    }
-  };
-
-  const pending = submissions.filter(s => s.status === 'pending');
-  const selesai = submissions.filter(s => s.status !== 'pending');
+  const totalLapangan = inputs.reduce((a, b) => a + parseInt(b.ke_lapangan), 0);
+  const totalSubmit = inputs.reduce((a, b) => a + parseInt(b.submit), 0);
+  const totalApprove = inputs.reduce((a, b) => a + parseInt(b.approve), 0);
 
   return (
     <div style={styles.container}>
+      {/* Header */}
       <div style={styles.header}>
-        <div>
-          <h2 style={styles.headerTitle}>Halo, {user?.nama}! 👋</h2>
-          <p style={styles.headerSub}>Petugas PML</p>
+        <div style={styles.headerLeft}>
+          <div style={styles.avatar}>{user?.nama?.charAt(0)}</div>
+          <div>
+            <div style={styles.headerName}>{user?.nama}</div>
+            <div style={styles.headerRole}>Petugas PML</div>
+          </div>
         </div>
-        <button style={styles.logoutBtn} onClick={logout}>Logout</button>
+        <button style={styles.logoutBtn} onClick={logout}>Keluar</button>
       </div>
 
-      <div style={styles.statsRow}>
-        <div style={styles.statCard}>
-          <p style={styles.statNum}>{pending.length}</p>
-          <p style={styles.statLabel}>Menunggu</p>
-        </div>
-        <div style={styles.statCard}>
-          <p style={{ ...styles.statNum, color: '#22c55e' }}>{submissions.filter(s => s.status === 'approved').length}</p>
-          <p style={styles.statLabel}>Disetujui</p>
-        </div>
-        <div style={styles.statCard}>
-          <p style={{ ...styles.statNum, color: '#ef4444' }}>{submissions.filter(s => s.status === 'ditolak').length}</p>
-          <p style={styles.statLabel}>Ditolak</p>
-        </div>
-      </div>
-
-      {pesan && <div style={styles.pesan}>{pesan}</div>}
-
-      {loading ? (
-        <p style={{ textAlign: 'center', color: '#64748b' }}>Memuat data...</p>
-      ) : (
-        <>
-          <h3 style={styles.sectionTitle}>Perlu Direview ({pending.length})</h3>
-          {pending.length === 0 ? (
-            <p style={styles.kosong}>Tidak ada submission yang menunggu.</p>
-          ) : (
-            pending.map((s) => (
-              <div key={s.id} style={styles.card}>
-                <div style={styles.cardHeader}>
-                  <div>
-                    <p style={styles.nama}>{s.nama_kepala_keluarga}</p>
-                    <p style={styles.alamat}>{s.alamat}</p>
-                    <p style={styles.ppl}>PPL: {s.nama_ppl}</p>
-                  </div>
-                  <span style={{ ...styles.badge, backgroundColor: statusColor(s.status) }}>
-                    {statusLabel(s.status)}
-                  </span>
+      {/* Daftar PPL */}
+      <div style={styles.card}>
+        <div style={styles.cardTitle}>PPL yang Dibawahi</div>
+        {loading ? (
+          <p style={{ textAlign: 'center', color: '#9AA5B4', fontSize: 13 }}>Memuat...</p>
+        ) : pplList.length === 0 ? (
+          <p style={{ textAlign: 'center', color: '#9AA5B4', fontSize: 13, padding: '16px 0' }}>Belum ada PPL.</p>
+        ) : (
+          pplList.map(ppl => (
+            <div
+              key={ppl.id}
+              onClick={() => handleSelectPPL(ppl)}
+              style={{
+                ...styles.pplItem,
+                backgroundColor: selectedPPL?.id === ppl.id ? '#EEF5FF' : '#F7F8FA',
+                borderColor: selectedPPL?.id === ppl.id ? '#003366' : '#EBEEf2',
+              }}
+            >
+              <div style={styles.pplAvatar}>{ppl.nama.charAt(0)}</div>
+              <div style={styles.pplInfo}>
+                <div style={styles.pplName}>{ppl.nama}</div>
+                <div style={styles.pplUsername}>@{ppl.username}</div>
+              </div>
+              <div style={styles.pplStats}>
+                <div style={styles.pplStat}>
+                  <div style={{ ...styles.pplStatNum, color: '#003366' }}>{ppl.total_ke_lapangan}</div>
+                  <div style={styles.pplStatLabel}>Lapangan</div>
                 </div>
-                {s.catatan_ppl && (
-                  <div style={styles.catatanBox}>
-                    <p style={styles.catatanLabel}>Catatan PPL:</p>
-                    <p style={styles.catatanText}>{s.catatan_ppl}</p>
+                <div style={styles.pplStat}>
+                  <div style={{ ...styles.pplStatNum, color: '#E8702A' }}>{ppl.total_submit}</div>
+                  <div style={styles.pplStatLabel}>Submit</div>
+                </div>
+                <div style={styles.pplStat}>
+                  <div style={{ ...styles.pplStatNum, color: '#1D9E75' }}>{ppl.total_approve}</div>
+                  <div style={styles.pplStatLabel}>Approve</div>
+                </div>
+              </div>
+              <div style={styles.pplArrow}>›</div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Detail Input PPL */}
+      {selectedPPL && (
+        <div style={styles.card}>
+          <div style={styles.cardTitle}>Riwayat Input — {selectedPPL.nama}</div>
+
+          {/* Summary */}
+          <div style={styles.summaryRow}>
+            <div style={styles.summaryCard}>
+              <div style={{ ...styles.summaryNum, color: '#003366' }}>{totalLapangan}</div>
+              <div style={styles.summaryLabel}>Ke Lapangan</div>
+            </div>
+            <div style={styles.summaryCard}>
+              <div style={{ ...styles.summaryNum, color: '#E8702A' }}>{totalSubmit}</div>
+              <div style={styles.summaryLabel}>Submit</div>
+            </div>
+            <div style={styles.summaryCard}>
+              <div style={{ ...styles.summaryNum, color: '#1D9E75' }}>{totalApprove}</div>
+              <div style={styles.summaryLabel}>Approve</div>
+            </div>
+          </div>
+
+          {/* List input */}
+          {inputs.length === 0 ? (
+            <p style={{ textAlign: 'center', color: '#9AA5B4', fontSize: 13, padding: '16px 0' }}>Belum ada data input.</p>
+          ) : (
+            inputs.map(i => (
+              <div key={i.id} style={styles.inputItem}>
+                <div style={styles.inputLeft}>
+                  <div style={styles.inputWilayah}>{i.kelurahan}, {i.kecamatan}</div>
+                  <div style={styles.inputDate}>
+                    {new Date(i.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </div>
-                )}
-                <textarea
-                  style={styles.textarea}
-                  placeholder="Catatan untuk PPL (opsional)..."
-                  value={catatan[s.id] || ''}
-                  onChange={(e) => setCatatan({ ...catatan, [s.id]: e.target.value })}
-                  rows={2}
-                />
-                <div style={styles.btnRow}>
-                  <button style={styles.tolakBtn} onClick={() => handleReview(s.id, 'ditolak')} disabled={reviewLoading !== null}>
-                    {reviewLoading === s.id + 'ditolak' ? '...' : '❌ Tolak'}
-                  </button>
-                  <button style={styles.approveBtn} onClick={() => handleReview(s.id, 'approved')} disabled={reviewLoading !== null}>
-                    {reviewLoading === s.id + 'approved' ? '...' : '✅ Setujui'}
-                  </button>
+                  {i.catatan && <div style={styles.inputCatatan}>{i.catatan}</div>}
+                </div>
+                <div style={styles.inputRight}>
+                  <div style={styles.inputStats}>
+                    <div style={styles.inputStat}>
+                      <div style={{ ...styles.inputStatNum, color: '#003366' }}>{i.ke_lapangan}</div>
+                      <div style={styles.inputStatLabel}>Lapangan</div>
+                    </div>
+                    <div style={styles.inputStat}>
+                      <div style={{ ...styles.inputStatNum, color: '#E8702A' }}>{i.submit}</div>
+                      <div style={styles.inputStatLabel}>Submit</div>
+                    </div>
+                    <div style={styles.inputStat}>
+                      <div style={{ ...styles.inputStatNum, color: '#1D9E75' }}>{i.approve}</div>
+                      <div style={styles.inputStatLabel}>Approve</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             ))
           )}
-          {selesai.length > 0 && (
-            <>
-              <h3 style={{ ...styles.sectionTitle, marginTop: '1.5rem' }}>Riwayat ({selesai.length})</h3>
-              {selesai.map((s) => (
-                <div key={s.id} style={{ ...styles.card, opacity: 0.75 }}>
-                  <div style={styles.cardHeader}>
-                    <div>
-                      <p style={styles.nama}>{s.nama_kepala_keluarga}</p>
-                      <p style={styles.alamat}>{s.alamat}</p>
-                      <p style={styles.ppl}>PPL: {s.nama_ppl}</p>
-                    </div>
-                    <span style={{ ...styles.badge, backgroundColor: statusColor(s.status) }}>
-                      {statusLabel(s.status)}
-                    </span>
-                  </div>
-                  {s.catatan_pml && (
-                    <div style={styles.catatanBox}>
-                      <p style={styles.catatanLabel}>Catatan PML:</p>
-                      <p style={styles.catatanText}>{s.catatan_pml}</p>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </>
-          )}
-        </>
+        </div>
       )}
     </div>
   );
 };
 
 const styles = {
-  container: { maxWidth: '480px', margin: '0 auto', padding: '1rem', backgroundColor: '#f0f4f8', minHeight: '100vh' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e3a5f', padding: '1rem', borderRadius: '12px', marginBottom: '1rem', color: 'white' },
-  headerTitle: { margin: 0, fontSize: '1.1rem' },
-  headerSub: { margin: 0, fontSize: '0.8rem', opacity: 0.8 },
-  logoutBtn: { backgroundColor: 'transparent', border: '1px solid white', color: 'white', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem' },
-  statsRow: { display: 'flex', gap: '0.75rem', marginBottom: '1rem' },
-  statCard: { flex: 1, backgroundColor: 'white', borderRadius: '10px', padding: '0.75rem', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  statNum: { fontSize: '1.5rem', fontWeight: '700', color: '#1e3a5f', margin: 0 },
-  statLabel: { fontSize: '0.75rem', color: '#64748b', margin: 0 },
-  pesan: { backgroundColor: 'white', padding: '10px', borderRadius: '8px', marginBottom: '1rem', textAlign: 'center', fontWeight: '600' },
-  sectionTitle: { color: '#1e3a5f', marginBottom: '0.75rem', fontSize: '1rem' },
-  kosong: { textAlign: 'center', color: '#64748b', fontSize: '0.9rem' },
-  card: { backgroundColor: 'white', borderRadius: '12px', padding: '1rem', marginBottom: '0.75rem', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' },
-  nama: { fontWeight: '700', color: '#1e293b', margin: '0 0 4px 0' },
-  alamat: { color: '#64748b', fontSize: '0.85rem', margin: '0 0 2px 0' },
-  ppl: { color: '#94a3b8', fontSize: '0.8rem', margin: 0 },
-  badge: { color: 'white', padding: '4px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '600', whiteSpace: 'nowrap' },
-  catatanBox: { backgroundColor: '#f8fafc', borderRadius: '8px', padding: '8px', marginBottom: '0.5rem' },
-  catatanLabel: { fontSize: '0.75rem', color: '#94a3b8', margin: '0 0 2px 0' },
-  catatanText: { fontSize: '0.85rem', color: '#475569', margin: 0 },
-  textarea: { width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', boxSizing: 'border-box', resize: 'none', marginBottom: '0.5rem' },
-  btnRow: { display: 'flex', gap: '0.5rem' },
-  tolakBtn: { flex: 1, padding: '10px', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '8px', fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer' },
-  approveBtn: { flex: 1, padding: '10px', backgroundColor: '#dcfce7', color: '#16a34a', border: 'none', borderRadius: '8px', fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer' },
+  container: { maxWidth: 480, margin: '0 auto', padding: '1rem', backgroundColor: '#F0F2F5', minHeight: '100vh' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#003366', padding: '14px 16px', borderRadius: 14, marginBottom: 14 },
+  headerLeft: { display: 'flex', alignItems: 'center', gap: 10 },
+  avatar: { width: 36, height: 36, borderRadius: '50%', backgroundColor: '#E8702A', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 500, fontSize: 15 },
+  headerName: { color: 'white', fontWeight: 500, fontSize: 14 },
+  headerRole: { color: 'rgba(255,255,255,0.5)', fontSize: 11, marginTop: 2 },
+  logoutBtn: { backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)', padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12 },
+  card: { backgroundColor: 'white', borderRadius: 14, padding: '16px', marginBottom: 14, border: '1px solid #EBEEf2', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' },
+  cardTitle: { fontSize: 11, fontWeight: 500, color: '#9AA5B4', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid #F0F2F5' },
+  pplItem: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, border: '1px solid', marginBottom: 8, cursor: 'pointer' },
+  pplAvatar: { width: 34, height: 34, borderRadius: '50%', backgroundColor: '#003366', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 500, fontSize: 14, flexShrink: 0 },
+  pplInfo: { flex: 1 },
+  pplName: { fontSize: 13, fontWeight: 500, color: '#2D3748' },
+  pplUsername: { fontSize: 11, color: '#9AA5B4', marginTop: 1 },
+  pplStats: { display: 'flex', gap: 12 },
+  pplStat: { textAlign: 'center' },
+  pplStatNum: { fontSize: 16, fontWeight: 500, lineHeight: 1 },
+  pplStatLabel: { fontSize: 9, color: '#9AA5B4', textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 2 },
+  pplArrow: { fontSize: 20, color: '#B0BAC6' },
+  summaryRow: { display: 'flex', gap: 8, marginBottom: 14 },
+  summaryCard: { flex: 1, background: '#F7F8FA', border: '1px solid #EBEEf2', borderRadius: 10, padding: '10px 8px', textAlign: 'center' },
+  summaryNum: { fontSize: 22, fontWeight: 500 },
+  summaryLabel: { fontSize: 9, color: '#9AA5B4', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 3 },
+  inputItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #F7F8FA' },
+  inputLeft: { flex: 1 },
+  inputWilayah: { fontSize: 13, fontWeight: 500, color: '#2D3748', marginBottom: 3 },
+  inputDate: { fontSize: 11, color: '#9AA5B4' },
+  inputCatatan: { fontSize: 11, color: '#7A8899', marginTop: 3, fontStyle: 'italic' },
+  inputRight: { marginLeft: 10 },
+  inputStats: { display: 'flex', gap: 10 },
+  inputStat: { textAlign: 'center' },
+  inputStatNum: { fontSize: 16, fontWeight: 500, lineHeight: 1 },
+  inputStatLabel: { fontSize: 9, color: '#9AA5B4', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2 },
 };
 
 export default DashboardPML;

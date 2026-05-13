@@ -1,35 +1,44 @@
--- Tabel users
+-- 1. TABEL USERS
 CREATE TABLE users (
   id SERIAL PRIMARY KEY,
   nama VARCHAR(100) NOT NULL,
   username VARCHAR(50) UNIQUE NOT NULL,
   password VARCHAR(255) NOT NULL,
-  role VARCHAR(10) CHECK (role IN ('admin', 'pml', 'ppl')) NOT NULL,
+  role VARCHAR(10)
+    CHECK (role IN ('admin', 'pml', 'ppl')) NOT NULL,
   pml_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  is_logged_in BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Tabel responden
-CREATE TABLE responden (
+-- 2. TABEL LOKASI
+CREATE TABLE lokasi (
   id SERIAL PRIMARY KEY,
-  nama_kepala_keluarga VARCHAR(100) NOT NULL,
-  alamat TEXT NOT NULL,
-  kecamatan VARCHAR(50),
-  kelurahan VARCHAR(50),
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  latitude DECIMAL(10, 8) NOT NULL,
+  longitude DECIMAL(11, 8) NOT NULL,
+  recorded_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 3. TABEL WILAYAH
+CREATE TABLE wilayah (
+  id SERIAL PRIMARY KEY,
+  kecamatan VARCHAR(100) NOT NULL,
+  kelurahan VARCHAR(100),
+  pml_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   ppl_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  status VARCHAR(20) DEFAULT 'belum' CHECK (status IN ('belum', 'sudah_lapangan', 'submitted', 'approved', 'ditolak')),
   created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Tabel submissions
-CREATE TABLE submissions (
+-- 4. TABEL INPUT HARIAN
+CREATE TABLE input_harian (
   id SERIAL PRIMARY KEY,
-  responden_id INTEGER REFERENCES responden(id) ON DELETE CASCADE,
-  ppl_id INTEGER REFERENCES users(id),
-  catatan_ppl TEXT,
-  submitted_at TIMESTAMP DEFAULT NOW(),
-  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'ditolak')),
-  catatan_pml TEXT,
-  reviewed_by INTEGER REFERENCES users(id),
-  reviewed_at TIMESTAMP
+  ppl_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  wilayah_id INTEGER REFERENCES wilayah(id) ON DELETE CASCADE,
+  ke_lapangan INTEGER DEFAULT 0,
+  submit INTEGER DEFAULT 0,
+  approve INTEGER DEFAULT 0,
+  catatan TEXT,
+  tanggal DATE DEFAULT CURRENT_DATE,
+  created_at TIMESTAMP DEFAULT NOW()
 );

@@ -1,22 +1,36 @@
 const pool = require('../config/db');
 
-const getMyResponden = async (req, res) => {
-  const result = await pool.query('SELECT * FROM responden WHERE ppl_id = $1', [req.user.id]);
-  res.json(result.rows);
+const getMyInputs = async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT i.*, w.kecamatan, w.kelurahan
+      FROM input_harian i
+      JOIN wilayah w ON i.wilayah_id = w.id
+      WHERE i.ppl_id = $1
+      ORDER BY i.created_at DESC
+    `, [req.user.id]);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ message: 'Gagal ambil data', error: err.message });
+  }
 };
 
-const submitResponden = async (req, res) => {
-  const { id } = req.params;
-  const { catatan_ppl } = req.body;
+const inputHarian = async (req, res) => {
+  const { wilayah_id, ke_lapangan, submit, approve, catatan, tanggal } = req.body;
+  if (!wilayah_id) {
+    return res.status(400).json({ message: 'Wilayah wajib dipilih' });
+  }
+  if (!ke_lapangan && !submit && !approve) {
+    return res.status(400).json({ message: 'Minimal satu data harus diisi' });
+  }
   try {
-    await pool.query('UPDATE responden SET status = $1 WHERE id = $2', ['submitted', id]);
-    const result = await pool.query(
-      'INSERT INTO submissions (responden_id, ppl_id, catatan_ppl) VALUES ($1,$2,$3) RETURNING *',
-      [id, req.user.id, catatan_ppl || null]
-    );
+    const result = await pool.query(`
+      INSERT INTO input_harian (ppl_id, wilayah_id, ke_lapangan, submit, approve, catatan, tanggal)
+      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
+    `, [req.user.id, wilayah_id, ke_lapangan || 0, submit || 0, approve || 0, catatan || null, tanggal || new Date().toISOString().split('T')[0]]);
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ message: 'Gagal submit', error: err.message });
+    res.status(500).json({ message: 'Gagal input data', error: err.message });
   }
 };
 
@@ -33,4 +47,4 @@ const kirimLokasi = async (req, res) => {
   }
 };
 
-module.exports = { getMyResponden, submitResponden, kirimLokasi };
+module.exports = { getMyInputs, inputHarian, kirimLokasi };
