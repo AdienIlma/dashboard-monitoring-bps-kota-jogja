@@ -15,12 +15,15 @@ import ProgressPetugas from "./components/ProgressPetugas";
 import DashboardPPL from "./pages/DashboardPPL";
 import DashboardPML from "./pages/DashboardPML";
 
-import { 
-  getPetugasData, 
+import {
+  getPetugasData,
   getProgressData,
   getKecamatanData,
+  getKecamatanHarianData,
   getProgress15Hari,
-  getPetugasDetail  
+  getPetugasDetail,
+  getPetugasDetailHarian,
+  getWilayahData,
 } from "./services/dataService";
 
 import axios from "axios";
@@ -38,9 +41,10 @@ function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await axios.post("http://localhost:5000/api/auth/login", 
+      const res = await axios.post(
+        "http://localhost:5000/api/auth/login",
         { username, password },
-        { headers: { "Content-Type": "application/json" } }
+        { headers: { "Content-Type": "application/json" } },
       );
       login(res.data);
     } catch (err) {
@@ -60,11 +64,25 @@ function LoginPage() {
         <form onSubmit={handleSubmit}>
           <div style={loginStyles.field}>
             <label style={loginStyles.label}>Username</label>
-            <input style={loginStyles.input} type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Masukkan username" required />
+            <input
+              style={loginStyles.input}
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Masukkan username"
+              required
+            />
           </div>
           <div style={loginStyles.field}>
             <label style={loginStyles.label}>Password</label>
-            <input style={loginStyles.input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Masukkan password" required />
+            <input
+              style={loginStyles.input}
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Masukkan password"
+              required
+            />
           </div>
           <button style={loginStyles.button} type="submit" disabled={loading}>
             {loading ? "Memproses..." : "Masuk"}
@@ -76,46 +94,132 @@ function LoginPage() {
 }
 
 const loginStyles = {
-  container: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#0f172a", backgroundImage: "radial-gradient(ellipse at top, #1e3a5f 0%, #0f172a 70%)" },
-  card: { backgroundColor: "white", padding: "2.5rem", borderRadius: "16px", boxShadow: "0 20px 60px rgba(0,0,0,0.4)", width: "100%", maxWidth: "380px" },
+  container: {
+    minHeight: "100vh",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0f172a",
+    backgroundImage: "radial-gradient(ellipse at top, #1e3a5f 0%, #0f172a 70%)",
+  },
+  card: {
+    backgroundColor: "white",
+    padding: "2.5rem",
+    borderRadius: "16px",
+    boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+    width: "100%",
+    maxWidth: "380px",
+  },
   logo: { textAlign: "center", fontSize: "2.5rem", marginBottom: "0.5rem" },
-  title: { textAlign: "center", color: "#1e3a5f", marginBottom: "4px", fontSize: "1.4rem", fontWeight: "800" },
-  subtitle: { textAlign: "center", color: "#64748b", marginBottom: "1.5rem", fontSize: "0.85rem" },
-  error: { backgroundColor: "#fee2e2", color: "#dc2626", padding: "10px", borderRadius: "8px", marginBottom: "1rem", fontSize: "0.85rem", textAlign: "center" },
+  title: {
+    textAlign: "center",
+    color: "#1e3a5f",
+    marginBottom: "4px",
+    fontSize: "1.4rem",
+    fontWeight: "800",
+  },
+  subtitle: {
+    textAlign: "center",
+    color: "#64748b",
+    marginBottom: "1.5rem",
+    fontSize: "0.85rem",
+  },
+  error: {
+    backgroundColor: "#fee2e2",
+    color: "#dc2626",
+    padding: "10px",
+    borderRadius: "8px",
+    marginBottom: "1rem",
+    fontSize: "0.85rem",
+    textAlign: "center",
+  },
   field: { marginBottom: "1rem" },
-  label: { display: "block", marginBottom: "6px", color: "#374151", fontWeight: "600", fontSize: "0.875rem" },
-  input: { width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: "8px", fontSize: "0.95rem", boxSizing: "border-box", outline: "none" },
-  button: { width: "100%", padding: "12px", backgroundColor: "#1e3a5f", color: "white", border: "none", borderRadius: "8px", fontSize: "1rem", fontWeight: "700", cursor: "pointer", marginTop: "0.5rem" },
+  label: {
+    display: "block",
+    marginBottom: "6px",
+    color: "#374151",
+    fontWeight: "600",
+    fontSize: "0.875rem",
+  },
+  input: {
+    width: "100%",
+    padding: "10px 12px",
+    border: "1px solid #d1d5db",
+    borderRadius: "8px",
+    fontSize: "0.95rem",
+    boxSizing: "border-box",
+    outline: "none",
+  },
+  button: {
+    width: "100%",
+    padding: "12px",
+    backgroundColor: "#1e3a5f",
+    color: "white",
+    border: "none",
+    borderRadius: "8px",
+    fontSize: "1rem",
+    fontWeight: "700",
+    cursor: "pointer",
+    marginTop: "0.5rem",
+  },
 };
 
 // ─── Dashboard Admin ─────────────────────────────────────────
 function AdminDashboard() {
   const { user, logout } = useAuth();
-  const [activeMenu, setActiveMenu] = useState('monitor');
+  const [activeMenu, setActiveMenu] = useState("monitor");
   const [petugasData, setPetugasData] = useState(null);
   const [progressData, setProgressData] = useState(null);
   const [kecamatanData, setKecamatanData] = useState([]);
+  const [kecamatanHarianData, setKecamatanHarianData] = useState([]);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+  const [tanggalHarian, setTanggalHarian] = useState(yesterday);
   const [progress15HariData, setProgress15HariData] = useState([]);
   const [petugasDetailData, setPetugasDetailData] = useState([]);
   const [error, setError] = useState("");
+  const [petugasHarianData, setPetugasHarianData] = useState([]);
+  const [wilayahList, setWilayahList] = useState([]);
 
   const stableLogout = useCallback(() => logout(), [logout]);
+
+  // App.js — ganti useEffect fetchPetugasHarian
+  useEffect(() => {
+    const fetchHarian = async () => {
+      try {
+        const [harianKecamatan, harianPetugas, detailTotal] = await Promise.all(
+          [
+            getKecamatanHarianData(tanggalHarian),
+            getPetugasDetailHarian(tanggalHarian),
+            getPetugasDetail(),
+          ],
+        );
+        setKecamatanHarianData(harianKecamatan);
+        setPetugasHarianData(harianPetugas);
+        setPetugasDetailData(detailTotal);
+      } catch (err) {
+        console.error("Gagal fetch harian:", err);
+      }
+    };
+    fetchHarian();
+  }, [tanggalHarian]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [petugas, progress, kecamatan, progress15, petugasDetail] = await Promise.all([
-          getPetugasData(),
-          getProgressData(),
-          getKecamatanData(),
-          getProgress15Hari(),
-          getPetugasDetail()
-        ]);
+        const [petugas, progress, kecamatan, progress15, wilayah] =
+          await Promise.all([
+            getPetugasData(),
+            getProgressData(),
+            getKecamatanData(),
+            getProgress15Hari(),
+            getWilayahData(),
+          ]);
+
         setPetugasData(petugas);
         setProgressData(progress);
         setKecamatanData(kecamatan);
         setProgress15HariData(progress15);
-        setPetugasDetailData(petugasDetail);
+        setWilayahList(wilayah);
       } catch (err) {
         if (err.response?.status === 401) {
           stableLogout();
@@ -131,17 +235,22 @@ function AdminDashboard() {
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       {/* Navbar */}
       <div style={navStyles.nav}>
-        <span style={navStyles.title}>📊 Dashboard Monitoring BPS Kota Yogyakarta</span>
+        <span style={navStyles.title}>
+          📊 Dashboard Monitoring BPS Kota Yogyakarta
+        </span>
         <div style={navStyles.tabs}>
           {[
-            ['monitor', '📊 Monitor'],
-            ['petugas', '👥 Kelola Petugas'],
-            ['tugas', '📋 Kelola Tugas'],
+            ["monitor", "📊 Monitor"],
+            ["petugas", "👥 Kelola Petugas"],
+            ["tugas", "📋 Kelola Tugas"],
           ].map(([key, label]) => (
             <button
               key={key}
               onClick={() => setActiveMenu(key)}
-              style={{ ...navStyles.tab, ...(activeMenu === key ? navStyles.tabActive : {}) }}
+              style={{
+                ...navStyles.tab,
+                ...(activeMenu === key ? navStyles.tabActive : {}),
+              }}
             >
               {label}
             </button>
@@ -149,18 +258,37 @@ function AdminDashboard() {
         </div>
         <div style={navStyles.right}>
           <span style={navStyles.nama}>👤 {user?.nama}</span>
-          <button style={navStyles.logoutBtn} onClick={stableLogout}>Logout</button>
+          <button style={navStyles.logoutBtn} onClick={stableLogout}>
+            Logout
+          </button>
         </div>
       </div>
 
-      {error && <div style={{ backgroundColor: "#fee2e2", color: "#dc2626", padding: "10px", textAlign: "center", fontSize: 13 }}>⚠️ {error}</div>}
+      {error && (
+        <div
+          style={{
+            backgroundColor: "#fee2e2",
+            color: "#dc2626",
+            padding: "10px",
+            textAlign: "center",
+            fontSize: 13,
+          }}
+        >
+          ⚠️ {error}
+        </div>
+      )}
 
       {/* Konten */}
-      {activeMenu === 'monitor' && (
+      {activeMenu === "monitor" && (
         <div className="dashboard" style={{ flex: 1 }}>
           <div className="left">
             <ProgressPendataan data={progressData} />
-            <TabelPendataan kecamatanData={kecamatanData} />
+            <TabelPendataan
+              kecamatanData={kecamatanData}
+              kecamatanHarianData={kecamatanHarianData}
+              tanggalHarian={tanggalHarian}
+              onTanggalChange={setTanggalHarian}
+            />
           </div>
           <div className="center">
             <PetugasLapangan data={petugasData} />
@@ -168,19 +296,25 @@ function AdminDashboard() {
             <Progress15Hari data={progress15HariData} />
           </div>
           <div className="right">
-            <ProgressPetugas petugasDetailData={petugasDetailData} kecamatanList={kecamatanData} />
+            <ProgressPetugas
+              petugasDetailData={petugasDetailData}
+              petugasHarianData={petugasHarianData}
+              tanggalHarian={tanggalHarian}
+              onTanggalChange={setTanggalHarian}
+              wilayahData={wilayahList}
+            />
           </div>
         </div>
       )}
 
-      {activeMenu === 'petugas' && (
-        <div style={{ flex: 1, overflow: 'auto', backgroundColor: '#f0f4f8' }}>
+      {activeMenu === "petugas" && (
+        <div style={{ flex: 1, overflow: "auto", backgroundColor: "#f0f4f8" }}>
           <KelolaPetugas />
         </div>
       )}
 
-      {activeMenu === 'tugas' && (
-        <div style={{ flex: 1, overflow: 'auto', backgroundColor: '#f0f4f8' }}>
+      {activeMenu === "tugas" && (
+        <div style={{ flex: 1, overflow: "auto", backgroundColor: "#f0f4f8" }}>
           <KelolaResponden />
         </div>
       )}
@@ -189,14 +323,39 @@ function AdminDashboard() {
 }
 
 const navStyles = {
-  nav: { display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#1e3a5f", padding: "0 1.5rem", color: "white", height: 56 },
-  title: { fontWeight: "700", fontSize: "0.95rem", whiteSpace: 'nowrap' },
-  tabs: { display: 'flex', gap: 4 },
-  tab: { padding: '6px 16px', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', background: 'transparent', color: 'rgba(255,255,255,0.7)' },
-  tabActive: { background: 'rgba(255,255,255,0.2)', color: 'white' },
+  nav: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#1e3a5f",
+    padding: "0 1.5rem",
+    color: "white",
+    height: 56,
+  },
+  title: { fontWeight: "700", fontSize: "0.95rem", whiteSpace: "nowrap" },
+  tabs: { display: "flex", gap: 4 },
+  tab: {
+    padding: "6px 16px",
+    border: "none",
+    borderRadius: 6,
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+    background: "transparent",
+    color: "rgba(255,255,255,0.7)",
+  },
+  tabActive: { background: "rgba(255,255,255,0.2)", color: "white" },
   right: { display: "flex", alignItems: "center", gap: "1rem" },
-  nama: { fontSize: "0.9rem", opacity: 0.9, whiteSpace: 'nowrap' },
-  logoutBtn: { backgroundColor: "transparent", border: "1px solid white", color: "white", padding: "5px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "0.85rem" },
+  nama: { fontSize: "0.9rem", opacity: 0.9, whiteSpace: "nowrap" },
+  logoutBtn: {
+    backgroundColor: "transparent",
+    border: "1px solid white",
+    color: "white",
+    padding: "5px 12px",
+    borderRadius: "6px",
+    cursor: "pointer",
+    fontSize: "0.85rem",
+  },
 };
 
 // ─── Router utama ─────────────────────────────────────────────
@@ -214,15 +373,30 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/admin" element={
-        <PrivateRoute role="admin"><AdminDashboard /></PrivateRoute>
-      } />
-      <Route path="/ppl" element={
-        <PrivateRoute role="ppl"><DashboardPPL /></PrivateRoute>
-      } />
-      <Route path="/pml" element={
-        <PrivateRoute role="pml"><DashboardPML /></PrivateRoute>
-      } />
+      <Route
+        path="/admin"
+        element={
+          <PrivateRoute role="admin">
+            <AdminDashboard />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/ppl"
+        element={
+          <PrivateRoute role="ppl">
+            <DashboardPPL />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/pml"
+        element={
+          <PrivateRoute role="pml">
+            <DashboardPML />
+          </PrivateRoute>
+        }
+      />
       <Route path="*" element={<Navigate to={`/${user.role}`} />} />
     </Routes>
   );

@@ -8,6 +8,7 @@ CREATE TABLE users (
     CHECK (role IN ('admin', 'pml', 'ppl')) NOT NULL,
   pml_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   is_logged_in BOOLEAN DEFAULT FALSE,
+  nomor VARCHAR(50),
   created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -38,6 +39,7 @@ CREATE TABLE input_harian (
   ke_lapangan INTEGER DEFAULT 0,
   submit INTEGER DEFAULT 0,
   approve INTEGER DEFAULT 0,
+  pml_hadir BOOLEAN DEFAULT FALSE,
   catatan TEXT,
   tanggal DATE DEFAULT CURRENT_DATE,
   created_at TIMESTAMP DEFAULT NOW()

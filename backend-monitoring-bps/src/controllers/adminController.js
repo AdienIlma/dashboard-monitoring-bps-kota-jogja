@@ -1,15 +1,17 @@
-const pool = require('../config/db');
-const bcrypt = require('bcryptjs');
+const pool = require("../config/db");
+const bcrypt = require("bcryptjs");
 
 // GET semua user
 const getAllUsers = async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, nama, username, role, pml_id, created_at FROM users ORDER BY role, nama'
+      "SELECT id, nama, username, role, pml_id, created_at FROM users ORDER BY role, nama",
     );
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ message: 'Gagal ambil data user', error: err.message });
+    res
+      .status(500)
+      .json({ message: "Gagal ambil data user", error: err.message });
   }
 };
 
@@ -19,27 +21,26 @@ const createUser = async (req, res) => {
 
   if (!nama || !username || !password || !role) {
     return res.status(400).json({
-      message: 'nama, username, password, role wajib diisi'
+      message: "nama, username, password, role wajib diisi",
     });
   }
 
-  if (!['admin', 'pml', 'ppl'].includes(role)) {
-    return res.status(400).json({ message: 'Role tidak valid' });
+  if (!["admin", "pml", "ppl"].includes(role)) {
+    return res.status(400).json({ message: "Role tidak valid" });
   }
 
-  if (role === 'ppl' && !pml_id) {
-    return res.status(400).json({ message: 'PPL harus punya PML' });
+  if (role === "ppl" && !pml_id) {
+    return res.status(400).json({ message: "PPL harus punya PML" });
   }
 
   try {
-    const cek = await pool.query(
-      'SELECT id FROM users WHERE username = $1',
-      [username]
-    );
+    const cek = await pool.query("SELECT id FROM users WHERE username = $1", [
+      username,
+    ]);
 
     if (cek.rows.length > 0) {
       return res.status(400).json({
-        message: 'Username sudah dipakai'
+        message: "Username sudah dipakai",
       });
     }
 
@@ -50,17 +51,17 @@ const createUser = async (req, res) => {
        (nama, username, password, role, pml_id)
        VALUES ($1,$2,$3,$4,$5)
        RETURNING id, nama, username, role, pml_id`,
-      [nama, username, hashed, role, pml_id || null]
+      [nama, username, hashed, role, pml_id || null],
     );
 
     res.status(201).json({
-      message: 'User berhasil dibuat',
-      user: result.rows[0]
+      message: "User berhasil dibuat",
+      user: result.rows[0],
     });
   } catch (err) {
     res.status(500).json({
-      message: 'Gagal buat user',
-      error: err.message
+      message: "Gagal buat user",
+      error: err.message,
     });
   }
 };
@@ -69,15 +70,15 @@ const createUser = async (req, res) => {
 const getPMLList = async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, nama, username FROM users WHERE role = $1 ORDER BY nama',
-      ['pml']
+      "SELECT id, nama, username FROM users WHERE role = $1 ORDER BY nama",
+      ["pml"],
     );
 
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({
-      message: 'Gagal ambil data PML',
-      error: err.message
+      message: "Gagal ambil data PML",
+      error: err.message,
     });
   }
 };
@@ -92,14 +93,14 @@ const getPPLByPML = async (req, res) => {
        FROM users
        WHERE role = $1 AND pml_id = $2
        ORDER BY nama`,
-      ['ppl', id]
+      ["ppl", id],
     );
 
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({
-      message: 'Gagal ambil data PPL',
-      error: err.message
+      message: "Gagal ambil data PPL",
+      error: err.message,
     });
   }
 };
@@ -107,44 +108,38 @@ const getPPLByPML = async (req, res) => {
 // GET progress keseluruhan
 const getDashboardProgress = async (req, res) => {
   try {
-    const lapangan = await pool.query(
-      'SELECT COALESCE(SUM(ke_lapangan), 0) AS total FROM input_harian'
-    );
-    const submit = await pool.query(
-      'SELECT COALESCE(SUM(submit), 0) AS total FROM input_harian'
-    );
-    const approve = await pool.query(
-      'SELECT COALESCE(SUM(approve), 0) AS total FROM input_harian'
-    );
+    const result = await pool.query(`
+      SELECT 
+        COALESCE(SUM(ke_lapangan), 0)::int AS lapangan,
+        COALESCE(SUM(submit), 0)::int      AS submit,
+        COALESCE(SUM(approve), 0)::int     AS approve
+      FROM input_harian
+    `);
 
     const totalTarget = 97000;
-    const lapanganVal = parseInt(lapangan.rows[0].total);
-    const submitVal = parseInt(submit.rows[0].total);
-    const approveVal = parseInt(approve.rows[0].total);
+    const lapanganVal = result.rows[0].lapangan;
+    const submitVal = result.rows[0].submit;
+    const approveVal = result.rows[0].approve;
+
+    const pct = (val) => parseFloat(((val / totalTarget) * 100).toFixed(2));
 
     res.json({
       sudahKeLapangan: lapanganVal,
-      sudahKeLapanganPersen: Math.round((lapanganVal / totalTarget) * 100),
+      sudahKeLapanganPersen: pct(lapanganVal),
+      sudahKeLapanganChartPersen: pct(lapanganVal),
       submit: submitVal,
-      submitPersen: Math.round((submitVal / totalTarget) * 100),
+      submitPersen: pct(submitVal),
+      submitChartPersen: pct(submitVal),
       approve: approveVal,
-      approvePersen: Math.round((approveVal / totalTarget) * 100),
+      approvePersen: pct(approveVal),
+      approvePersen2: pct(approveVal),
       target: totalTarget,
-      belumPersen: Math.max(
-        0,
-        100 - Math.round((lapanganVal / totalTarget) * 100)
-      ),
-      submitChartPersen: Math.round((submitVal / totalTarget) * 100),
-      approvePersen2:
-        Math.round((approveVal / totalTarget) * 10) / 10,
-      sudahKeLapanganChartPersen:
-        Math.round((lapanganVal / totalTarget) * 100)
+      belumPersen: parseFloat((100 - pct(approveVal)).toFixed(2)),
     });
   } catch (err) {
-    res.status(500).json({
-      message: 'Gagal ambil progress',
-      error: err.message
-    });
+    res
+      .status(500)
+      .json({ message: "Gagal ambil progress", error: err.message });
   }
 };
 
@@ -152,19 +147,19 @@ const getDashboardProgress = async (req, res) => {
 const getDashboardPetugas = async (req, res) => {
   try {
     const totalPetugas = await pool.query(
-      "SELECT COUNT(*) FROM users WHERE role IN ('pml','ppl')"
+      "SELECT COUNT(*) FROM users WHERE role IN ('pml','ppl')",
     );
 
     const totalPML = await pool.query(
-      "SELECT COUNT(*) FROM users WHERE role = 'pml'"
+      "SELECT COUNT(*) FROM users WHERE role = 'pml'",
     );
 
     const totalPPL = await pool.query(
-      "SELECT COUNT(*) FROM users WHERE role = 'ppl'"
+      "SELECT COUNT(*) FROM users WHERE role = 'ppl'",
     );
 
     const aktif = await pool.query(
-      "SELECT COUNT(*) FROM users WHERE role IN ('pml','ppl') AND is_logged_in = TRUE"
+      "SELECT COUNT(*) FROM users WHERE role IN ('pml','ppl') AND is_logged_in = TRUE",
     );
 
     const totalP = parseInt(totalPetugas.rows[0].count);
@@ -177,23 +172,63 @@ const getDashboardPetugas = async (req, res) => {
       petugasAktif: aktifCount,
       petugasAktifPersen:
         totalP > 0 ? Math.round((aktifCount / totalP) * 100) : 0,
-      lastUpdate: new Date().toLocaleString('id-ID', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
+      lastUpdate: new Date().toLocaleString("id-ID", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
     });
   } catch (err) {
     res.status(500).json({
-      message: 'Gagal ambil data petugas',
-      error: err.message
+      message: "Gagal ambil data petugas",
+      error: err.message,
     });
   }
 };
 
-// GET data per kecamatan
+// helper shared
+function buildKecamatanMap(rows) {
+  const kecamatanMap = {};
+
+  rows.forEach((row, idx) => {
+    if (!kecamatanMap[row.kecamatan]) {
+      kecamatanMap[row.kecamatan] = {
+        id: Object.keys(kecamatanMap).length + 1,
+        nama: row.kecamatan,
+        sudahKeLapangan: 0,
+        submit: 0,
+        approve: 0,
+        target: 0,
+        kelurahan: [],
+      };
+    }
+
+    const kec = kecamatanMap[row.kecamatan];
+    const target = parseInt(row.target || 0);
+
+    kec.sudahKeLapangan += parseInt(row.sudah_ke_lapangan);
+    kec.submit += parseInt(row.submit);
+    kec.approve += parseInt(row.approve);
+
+    // total target kecamatan
+    kec.target += target;
+
+    kec.kelurahan.push({
+      id: idx + 1,
+      nama: row.kelurahan,
+      sudahKeLapangan: parseInt(row.sudah_ke_lapangan),
+      submit: parseInt(row.submit),
+      approve: parseInt(row.approve),
+      target: target,
+    });
+  });
+
+  return Object.values(kecamatanMap);
+}
+
+// GET data per kecamatan (total)
 const getDashboardKecamatan = async (req, res) => {
   try {
     const result = await pool.query(`
@@ -201,53 +236,72 @@ const getDashboardKecamatan = async (req, res) => {
         w.kecamatan,
         w.kelurahan,
         w.id AS wilayah_id,
+        w.target,
+
         COALESCE(SUM(i.ke_lapangan), 0) AS sudah_ke_lapangan,
         COALESCE(SUM(i.submit), 0) AS submit,
         COALESCE(SUM(i.approve), 0) AS approve
+
       FROM wilayah w
+
       LEFT JOIN input_harian i
         ON i.wilayah_id = w.id
-      GROUP BY w.kecamatan, w.kelurahan, w.id
+
+      GROUP BY
+        w.kecamatan,
+        w.kelurahan,
+        w.id,
+        w.target
+
       ORDER BY w.kecamatan, w.kelurahan
-    `);
-
-    const kecamatanMap = {};
-
-    result.rows.forEach((row, idx) => {
-      if (!kecamatanMap[row.kecamatan]) {
-        kecamatanMap[row.kecamatan] = {
-          id: Object.keys(kecamatanMap).length + 1,
-          nama: row.kecamatan,
-          sudahKeLapangan: 0,
-          submit: 0,
-          approve: 0,
-          target: 0,
-          kelurahan: []
-        };
-      }
-
-      const kec = kecamatanMap[row.kecamatan];
-
-      kec.sudahKeLapangan += parseInt(row.sudah_ke_lapangan);
-      kec.submit += parseInt(row.submit);
-      kec.approve += parseInt(row.approve);
-
-      kec.kelurahan.push({
-        id: idx + 1,
-        nama: row.kelurahan,
-        sudahKeLapangan: parseInt(row.sudah_ke_lapangan),
-        submit: parseInt(row.submit),
-        approve: parseInt(row.approve),
-        target: 0
-      });
-    });
-
-    res.json(Object.values(kecamatanMap));
+`);
+    res.json(buildKecamatanMap(result.rows));
   } catch (err) {
-    res.status(500).json({
-      message: 'Gagal ambil data kecamatan',
-      error: err.message
-    });
+    res
+      .status(500)
+      .json({ message: "Gagal ambil data kecamatan", error: err.message });
+  }
+};
+
+// GET data per kecamatan (harian = kemarin)
+const getDashboardKecamatanHarian = async (req, res) => {
+  try {
+    const { tanggal } = req.query;
+    const targetDate =
+      tanggal || new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    const result = await pool.query(    `
+        SELECT
+          w.kecamatan,
+          w.kelurahan,
+          w.id AS wilayah_id,
+          w.target,
+
+          COALESCE(SUM(i.ke_lapangan), 0) AS sudah_ke_lapangan,
+          COALESCE(SUM(i.submit), 0) AS submit,
+          COALESCE(SUM(i.approve), 0) AS approve
+
+        FROM wilayah w
+
+        LEFT JOIN input_harian i
+          ON i.wilayah_id = w.id
+          AND i.tanggal = $1
+
+        GROUP BY
+          w.kecamatan,
+          w.kelurahan,
+          w.id,
+          w.target
+
+        ORDER BY w.kecamatan, w.kelurahan
+      `,
+      [targetDate],
+    );
+
+    res.json(buildKecamatanMap(result.rows));
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Gagal ambil data harian", error: err.message });
   }
 };
 
@@ -260,14 +314,28 @@ const getDashboardPetugasDetail = async (req, res) => {
         u.nama,
         u.role AS tipe,
         u.pml_id,
+        u.target,
+
         COALESCE(SUM(i.ke_lapangan), 0) AS sudah_ke_lapangan,
-        COALESCE(SUM(i.submit), 0) AS submit,
-        COALESCE(SUM(i.approve), 0) AS approve
+        COALESCE(SUM(i.submit), 0)       AS submit,
+        COALESCE(SUM(i.approve), 0)      AS approve,
+
+        -- Untuk PPL: berapa hari pml_hadir=true milik mereka sendiri
+        COUNT(DISTINCT CASE WHEN i.pml_hadir = TRUE THEN i.tanggal END) AS jumlah_hadir,
+
+        -- Untuk PML: hitung dari semua PPL bawahannya
+        (
+          SELECT COUNT(DISTINCT ih.tanggal)
+          FROM input_harian ih
+          JOIN users ppl ON ppl.id = ih.ppl_id
+          WHERE ppl.pml_id = u.id
+            AND ih.pml_hadir = TRUE
+        ) AS jumlah_hadir_pml
+
       FROM users u
-      LEFT JOIN input_harian i
-        ON i.ppl_id = u.id
-      WHERE u.role IN ('pml','ppl')
-      GROUP BY u.id, u.nama, u.role, u.pml_id
+      LEFT JOIN input_harian i ON i.ppl_id = u.id
+      WHERE u.role IN ('pml', 'ppl')
+      GROUP BY u.id, u.nama, u.role, u.pml_id, u.target
       ORDER BY u.role, u.nama
     `);
 
@@ -280,13 +348,81 @@ const getDashboardPetugasDetail = async (req, res) => {
         sudahKeLapangan: parseInt(r.sudah_ke_lapangan),
         submit: parseInt(r.submit),
         approve: parseInt(r.approve),
-        target: 0
-      }))
+        target: parseInt(r.target || 0),
+        jumlahHadir:
+          r.tipe === "pml"
+            ? parseInt(r.jumlah_hadir_pml || 0)
+            : parseInt(r.jumlah_hadir || 0),
+      })),
     );
   } catch (err) {
     res.status(500).json({
-      message: 'Gagal ambil detail petugas',
-      error: err.message
+      message: "Gagal ambil detail petugas",
+      error: err.message,
+    });
+  }
+};
+
+const getDashboardPetugasDetailHarian = async (req, res) => {
+  try {
+    const { tanggal } = req.query;
+
+    const result = await pool.query(
+      `
+      SELECT
+        u.id,
+        u.nama,
+        u.role AS tipe,
+        u.pml_id,
+        u.target,
+
+        COALESCE(SUM(i.ke_lapangan), 0) AS sudah_ke_lapangan,
+        COALESCE(SUM(i.submit), 0)       AS submit,
+        COALESCE(SUM(i.approve), 0)      AS approve,
+
+        -- Untuk PPL: apakah pml_hadir = true di tanggal ini
+        BOOL_OR(i.pml_hadir) AS pml_hadir_hari_ini,
+
+        -- Untuk PML: apakah minimal 1 PPL bawahannya mencatat pml_hadir=true
+        (
+          SELECT BOOL_OR(ih.pml_hadir)
+          FROM input_harian ih
+          JOIN users ppl ON ppl.id = ih.ppl_id
+          WHERE ppl.pml_id = u.id
+            AND ih.tanggal = $1
+        ) AS pml_hadir_sebagai_pml
+
+      FROM users u
+      LEFT JOIN input_harian i
+        ON i.ppl_id = u.id
+        AND i.tanggal = $1
+      WHERE u.role IN ('pml', 'ppl')
+      GROUP BY u.id, u.nama, u.role, u.pml_id, u.target
+      ORDER BY u.role, u.nama
+    `,
+      [tanggal],
+    );
+
+    res.json(
+      result.rows.map((r) => ({
+        id: r.id,
+        nama: r.nama,
+        tipe: r.tipe.toUpperCase(),
+        pml_id: r.pml_id,
+        sudahKeLapangan: parseInt(r.sudah_ke_lapangan),
+        submit: parseInt(r.submit),
+        approve: parseInt(r.approve),
+        target: parseInt(r.target || 0),
+        // PPL: apakah PML hadir mendampingi mereka hari ini
+        hadirHariIni: r.pml_hadir_hari_ini ? 1 : 0,
+        // PML: apakah hadir di minimal 1 PPL bawahannya hari ini
+        pmlHadirSebagaiPml: r.pml_hadir_sebagai_pml ? 1 : 0,
+      })),
+    );
+  } catch (err) {
+    res.status(500).json({
+      message: "Gagal ambil detail petugas harian",
+      error: err.message,
     });
   }
 };
@@ -294,13 +430,18 @@ const getDashboardPetugasDetail = async (req, res) => {
 // GET sebaran petugas untuk peta
 const getDashboardSebaranPetugas = async (req, res) => {
   try {
-    // Ambil semua PML dan PPL beserta status login
+    // Ambil semua PML dan PPL beserta status login + wilayah
     const users = await pool.query(`
-      SELECT id, nama, role, pml_id, is_logged_in
-      FROM users
-      WHERE role IN ('pml','ppl')
-      ORDER BY role, nama
-    `);
+      SELECT DISTINCT ON (u.id)
+        u.id, u.nama, u.role, u.pml_id, u.is_logged_in,
+        w.kecamatan, w.kelurahan
+      FROM users u
+      LEFT JOIN wilayah w 
+        ON (u.role = 'ppl' AND w.ppl_id = u.id)
+        OR (u.role = 'pml' AND w.pml_id = u.id)
+      WHERE u.role IN ('pml','ppl')
+      ORDER BY u.id, u.role, u.nama
+`   );
 
     // Ambil lokasi terakhir setiap user
     const lokasi = await pool.query(`
@@ -325,22 +466,20 @@ const getDashboardSebaranPetugas = async (req, res) => {
       nama: u.nama,
       role: u.role,
       pml_id: u.pml_id,
-      lat: lokasiMap[u.id]
-        ? parseFloat(lokasiMap[u.id].lat)
-        : null,
-      lng: lokasiMap[u.id]
-        ? parseFloat(lokasiMap[u.id].lng)
-        : null,
+      kecamatan: u.kecamatan || null,
+      kelurahan: u.kelurahan || null,
+      lat: lokasiMap[u.id] ? parseFloat(lokasiMap[u.id].lat) : null,
+      lng: lokasiMap[u.id] ? parseFloat(lokasiMap[u.id].lng) : null,
       recorded_at: lokasiMap[u.id]?.recorded_at || null,
-      online: u.is_logged_in, // langsung berdasarkan status login
-      punya_lokasi: !!lokasiMap[u.id]
+      online: u.is_logged_in,
+      punya_lokasi: !!lokasiMap[u.id],
     }));
 
     res.json(result);
   } catch (err) {
     res.status(500).json({
-      message: 'Gagal ambil sebaran petugas',
-      error: err.message
+      message: "Gagal ambil sebaran petugas",
+      error: err.message,
     });
   }
 };
@@ -362,19 +501,19 @@ const getDashboardProgress15Hari = async (req, res) => {
 
     res.json(
       result.rows.map((r) => ({
-        tanggal: new Date(r.tanggal).toLocaleDateString('id-ID', {
-          day: 'numeric',
-          month: 'short'
+        tanggal: new Date(r.tanggal).toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "short",
         }),
         sudahKeLapangan: parseInt(r.sudah_ke_lapangan),
         submit: parseInt(r.submit),
-        approve: parseInt(r.approve)
-      }))
+        approve: parseInt(r.approve),
+      })),
     );
   } catch (err) {
     res.status(500).json({
-      message: 'Gagal ambil progress 15 hari',
-      error: err.message
+      message: "Gagal ambil progress 15 hari",
+      error: err.message,
     });
   }
 };
@@ -386,17 +525,17 @@ const updateUser = async (req, res) => {
 
   try {
     const cek = await pool.query(
-      'SELECT id FROM users WHERE username = $1 AND id != $2',
-      [username, id]
+      "SELECT id FROM users WHERE username = $1 AND id != $2",
+      [username, id],
     );
 
     if (cek.rows.length > 0) {
       return res.status(400).json({
-        message: 'Username sudah digunakan'
+        message: "Username sudah digunakan",
       });
     }
 
-    if (password && password.trim() !== '') {
+    if (password && password.trim() !== "") {
       const hashed = await bcrypt.hash(password, 10);
 
       await pool.query(
@@ -407,14 +546,7 @@ const updateUser = async (req, res) => {
              pml_id = $4,
              password = $5
          WHERE id = $6`,
-        [
-          nama,
-          username,
-          role,
-          role === 'ppl' ? pml_id : null,
-          hashed,
-          id
-        ]
+        [nama, username, role, role === "ppl" ? pml_id : null, hashed, id],
       );
     } else {
       await pool.query(
@@ -424,21 +556,15 @@ const updateUser = async (req, res) => {
              role = $3,
              pml_id = $4
          WHERE id = $5`,
-        [
-          nama,
-          username,
-          role,
-          role === 'ppl' ? pml_id : null,
-          id
-        ]
+        [nama, username, role, role === "ppl" ? pml_id : null, id],
       );
     }
 
-    res.json({ message: 'User berhasil diupdate' });
+    res.json({ message: "User berhasil diupdate" });
   } catch (err) {
     res.status(500).json({
-      message: 'Gagal update user',
-      error: err.message
+      message: "Gagal update user",
+      error: err.message,
     });
   }
 };
@@ -448,15 +574,15 @@ const deleteUser = async (req, res) => {
   const { id } = req.params;
 
   try {
-    await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    await pool.query("DELETE FROM users WHERE id = $1", [id]);
 
     res.json({
-      message: 'User berhasil dihapus'
+      message: "User berhasil dihapus",
     });
   } catch (err) {
     res.status(500).json({
-      message: 'Gagal hapus user',
-      error: err.message
+      message: "Gagal hapus user",
+      error: err.message,
     });
   }
 };
@@ -478,8 +604,8 @@ const getWilayah = async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({
-      message: 'Gagal ambil wilayah',
-      error: err.message
+      message: "Gagal ambil wilayah",
+      error: err.message,
     });
   }
 };
@@ -493,21 +619,16 @@ const createWilayah = async (req, res) => {
       `INSERT INTO wilayah
        (kecamatan, kelurahan, pml_id, ppl_id)
        VALUES ($1,$2,$3,$4)`,
-      [
-        kecamatan,
-        kelurahan,
-        pml_id || null,
-        ppl_id || null
-      ]
+      [kecamatan, kelurahan, pml_id || null, ppl_id || null],
     );
 
     res.json({
-      message: 'Wilayah berhasil ditambahkan'
+      message: "Wilayah berhasil ditambahkan",
     });
   } catch (err) {
     res.status(500).json({
-      message: 'Gagal tambah wilayah',
-      error: err.message
+      message: "Gagal tambah wilayah",
+      error: err.message,
     });
   }
 };
@@ -525,22 +646,16 @@ const updateWilayah = async (req, res) => {
            pml_id = $3,
            ppl_id = $4
        WHERE id = $5`,
-      [
-        kecamatan,
-        kelurahan,
-        pml_id || null,
-        ppl_id || null,
-        id
-      ]
+      [kecamatan, kelurahan, pml_id || null, ppl_id || null, id],
     );
 
     res.json({
-      message: 'Wilayah berhasil diupdate'
+      message: "Wilayah berhasil diupdate",
     });
   } catch (err) {
     res.status(500).json({
-      message: 'Gagal update wilayah',
-      error: err.message
+      message: "Gagal update wilayah",
+      error: err.message,
     });
   }
 };
@@ -550,18 +665,15 @@ const deleteWilayah = async (req, res) => {
   const { id } = req.params;
 
   try {
-    await pool.query(
-      'DELETE FROM wilayah WHERE id = $1',
-      [id]
-    );
+    await pool.query("DELETE FROM wilayah WHERE id = $1", [id]);
 
     res.json({
-      message: 'Wilayah berhasil dihapus'
+      message: "Wilayah berhasil dihapus",
     });
   } catch (err) {
     res.status(500).json({
-      message: 'Gagal hapus wilayah',
-      error: err.message
+      message: "Gagal hapus wilayah",
+      error: err.message,
     });
   }
 };
@@ -576,11 +688,13 @@ module.exports = {
   getDashboardProgress,
   getDashboardPetugas,
   getDashboardKecamatan,
+  getDashboardKecamatanHarian,
   getDashboardPetugasDetail,
+  getDashboardPetugasDetailHarian,
   getDashboardSebaranPetugas,
   getDashboardProgress15Hari,
   getWilayah,
   createWilayah,
   updateWilayah,
-  deleteWilayah
+  deleteWilayah,
 };
