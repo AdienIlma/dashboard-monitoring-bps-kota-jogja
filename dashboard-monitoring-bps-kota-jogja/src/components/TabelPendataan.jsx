@@ -146,7 +146,12 @@ const TabelPendataan = ({
           <input
             type="date"
             value={tanggalHarian}
-            max={new Date().toISOString().split("T")[0]}
+            max={(() => {
+              const now = new Date();
+              const offset = now.getTimezoneOffset();
+              const local = new Date(now.getTime() - offset * 60 * 1000);
+              return local.toISOString().split("T")[0];
+            })()}
             onChange={(e) => onTanggalChange(e.target.value)}
             style={{
               border: "none",
@@ -298,7 +303,14 @@ const TabelPendataan = ({
                       </td>
                     </tr>
                     {isExpanded &&
-                      kec.kelurahan.map((kel) => (
+                      kec.kelurahan
+                        .filter(
+                          (kel) =>
+                          kel.nama &&
+                          kel.nama.trim() !== "" &&
+                          kel.nama !== kec.nama
+                      )
+                        .map((kel) =>  (
                         <tr key={kel.id} style={{ background: "#F7F8FA" }}>
                           <td
                             style={{

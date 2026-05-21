@@ -8,6 +8,13 @@ const MENU = [
   { key: "approve", label: "Approve", color: "#1D9E75" },
 ];
 
+// ── Timezone-aware today ──────────────────────────────────────────────────────
+const getToday = () => {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().split("T")[0];
+};
+
 const DashboardPPL = () => {
   const { user, logout } = useAuth();
   const [activeMenu, setActiveMenu] = useState("lapangan");
@@ -15,22 +22,21 @@ const DashboardPPL = () => {
   const [inputs, setInputs] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // ── Sesi (dibagi semua form) ──────────────────────────────────────────────
   const [sesi, setSesi] = useState({
-    tanggal: new Date().toISOString().split("T")[0],
+    tanggal: getToday(), // ← pakai getToday(), bukan toISOString()
     pml_hadir: false,
   });
 
-  // ── Form per-tahapan ──────────────────────────────────────────────────────
   const [form, setForm] = useState({
     wilayah_id: "",
-    kecamatan: "",
     ke_lapangan: "",
     submit: "",
     approve: "",
     catatan: "",
   });
 
+  const [selectedSLS, setSelectedSLS] = useState(null);
+  const [slsOpen, setSlsOpen] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [pesan, setPesan] = useState({ text: "", type: "" });
 
@@ -70,17 +76,40 @@ const DashboardPPL = () => {
     });
   };
 
+  const isSLSPenuh = (w) => {
+    if (!w.target || parseInt(w.target) <= 0) return false;
+    const target = parseInt(w.target);
+    if (activeMenu === "lapangan") return parseInt(w.total_lapangan || 0) >= target;
+    if (activeMenu === "submit")   return parseInt(w.total_submit   || 0) >= target;
+    if (activeMenu === "approve")  return parseInt(w.total_approve  || 0) >= target;
+    return false;
+  };
+
+  const getProgres = (w) => {
+    if (activeMenu === "lapangan") return parseInt(w.total_lapangan || 0);
+    if (activeMenu === "submit")   return parseInt(w.total_submit   || 0);
+    if (activeMenu === "approve")  return parseInt(w.total_approve  || 0);
+    return 0;
+  };
+
+  const handlePilihSLS = (w) => {
+    if (isSLSPenuh(w)) return;
+    setSelectedSLS(w);
+    setForm((f) => ({ ...f, wilayah_id: w.id }));
+    setSlsOpen(false);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.wilayah_id) {
-      setPesan({ text: "Wilayah wajib dipilih!", type: "error" });
+      setPesan({ text: "SLS wajib dipilih!", type: "error" });
       return;
     }
 
     const nilai = {
       lapangan: parseInt(form.ke_lapangan) || 0,
-      submit: parseInt(form.submit) || 0,
-      approve: parseInt(form.approve) || 0,
+      submit:   parseInt(form.submit)      || 0,
+      approve:  parseInt(form.approve)     || 0,
     };
 
     if (nilai[activeMenu] <= 0) {
@@ -88,73 +117,61 @@ const DashboardPPL = () => {
       return;
     }
 
+    if (selectedSLS && selectedSLS.target > 0) {
+      const progres = getProgres(selectedSLS);
+      const sisa = parseInt(selectedSLS.target) - progres;
+      if (nilai[activeMenu] > sisa) {
+        setPesan({ text: `Jumlah melebihi sisa target! Sisa: ${sisa}`, type: "error" });
+        return;
+      }
+    }
+
     setSubmitLoading(true);
     setPesan({ text: "", type: "" });
     try {
       await api.post("/ppl/input", {
-        wilayah_id: form.wilayah_id,
+        wilayah_id:  form.wilayah_id,
         ke_lapangan: activeMenu === "lapangan" ? nilai.lapangan : 0,
-        submit: activeMenu === "submit" ? nilai.submit : 0,
-        approve: activeMenu === "approve" ? nilai.approve : 0,
-        catatan: form.catatan,
-        // ← ambil dari sesi, bukan dari form
-        tanggal: sesi.tanggal,
-        pml_hadir: sesi.pml_hadir,
+        submit:      activeMenu === "submit"   ? nilai.submit   : 0,
+        approve:     activeMenu === "approve"  ? nilai.approve  : 0,
+        catatan:     form.catatan,
+        tanggal:     sesi.tanggal,
+        pml_hadir:   sesi.pml_hadir,
       });
       setPesan({ text: "Data berhasil disimpan!", type: "success" });
-      // reset hanya field per-tahapan, sesi tetap
-      setForm((f) => ({
-        ...f,
-        wilayah_id: "",
-        kecamatan: "",
-        ke_lapangan: "",
-        submit: "",
-        approve: "",
-        catatan: "",
-      }));
+      setForm({ wilayah_id: "", ke_lapangan: "", submit: "", approve: "", catatan: "" });
+      setSelectedSLS(null);
       fetchAll();
     } catch (err) {
-      setPesan({
-        text: err.response?.data?.message || "Gagal simpan",
-        type: "error",
-      });
+      setPesan({ text: err.response?.data?.message || "Gagal simpan", type: "error" });
     } finally {
       setSubmitLoading(false);
     }
   };
 
-  const kecamatanList = [...new Set(wilayah.map((w) => w.kecamatan))];
-  const kelurahanList = wilayah.filter(
-    (w) =>
-      w.kecamatan === form.kecamatan &&
-      w.kelurahan &&
-      w.kelurahan !== w.kecamatan,
-  );
-
   const totalLapangan = inputs.reduce((a, b) => a + parseInt(b.ke_lapangan), 0);
-  const totalSubmit = inputs.reduce((a, b) => a + parseInt(b.submit), 0);
-  const totalApprove = inputs.reduce((a, b) => a + parseInt(b.approve), 0);
+  const totalSubmit   = inputs.reduce((a, b) => a + parseInt(b.submit),      0);
+  const totalApprove  = inputs.reduce((a, b) => a + parseInt(b.approve),     0);
 
   const filteredInputs = inputs.filter((i) => {
     if (activeMenu === "lapangan") return parseInt(i.ke_lapangan) > 0;
-    if (activeMenu === "submit") return parseInt(i.submit) > 0;
-    if (activeMenu === "approve") return parseInt(i.approve) > 0;
+    if (activeMenu === "submit")   return parseInt(i.submit)      > 0;
+    if (activeMenu === "approve")  return parseInt(i.approve)     > 0;
     return true;
   });
 
-  const activeColor =
-    MENU.find((m) => m.key === activeMenu)?.color || "#003366";
+  const activeColor = MENU.find((m) => m.key === activeMenu)?.color || "#003366";
 
   const fieldLabel = {
     lapangan: "Jumlah Ke Lapangan",
-    submit: "Jumlah Submit",
-    approve: "Jumlah Approve",
+    submit:   "Jumlah Submit",
+    approve:  "Jumlah Approve",
   };
 
   const fieldKey = {
     lapangan: "ke_lapangan",
-    submit: "submit",
-    approve: "approve",
+    submit:   "submit",
+    approve:  "approve",
   };
 
   return (
@@ -168,9 +185,7 @@ const DashboardPPL = () => {
             <div style={styles.headerRole}>Petugas PPL</div>
           </div>
         </div>
-        <button style={styles.logoutBtn} onClick={logout}>
-          Keluar
-        </button>
+        <button style={styles.logoutBtn} onClick={logout}>Keluar</button>
       </div>
 
       {/* Stats */}
@@ -178,86 +193,55 @@ const DashboardPPL = () => {
         {MENU.map((m) => (
           <div key={m.key} style={styles.statCard}>
             <div style={{ ...styles.statNum, color: m.color }}>
-              {m.key === "lapangan"
-                ? totalLapangan
-                : m.key === "submit"
-                  ? totalSubmit
-                  : totalApprove}
+              {m.key === "lapangan" ? totalLapangan : m.key === "submit" ? totalSubmit : totalApprove}
             </div>
             <div style={styles.statLabel}>{m.label}</div>
           </div>
         ))}
       </div>
 
+      {/* Card Sesi */}
       <div style={styles.card}>
-        {/* Tanggal */}
         <div style={styles.field}>
           <label style={styles.label}>Tanggal</label>
           <input
             style={styles.input}
             type="date"
             value={sesi.tanggal}
-            max={new Date().toISOString().split("T")[0]}
-            onChange={(e) =>
-              setSesi((s) => ({ ...s, tanggal: e.target.value }))
-            }
+            max={getToday()} // ← pakai getToday()
+            onChange={(e) => setSesi((s) => ({ ...s, tanggal: e.target.value }))}
             required
           />
         </div>
 
-        {/* PML Hadir */}
         <div style={styles.field}>
           <label style={styles.label}>Kunjungan PML</label>
           <div
             onClick={() => setSesi((s) => ({ ...s, pml_hadir: !s.pml_hadir }))}
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
+              display: "flex", alignItems: "center", gap: 10,
               padding: "10px 12px",
               border: `1.5px solid ${sesi.pml_hadir ? "#1D9E75" : "#EBEEf2"}`,
               borderRadius: 8,
               backgroundColor: sesi.pml_hadir ? "#EDFAF4" : "#F7F8FA",
-              cursor: "pointer",
-              transition: "all 0.15s",
+              cursor: "pointer", transition: "all 0.15s",
             }}
           >
-            <div
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 6,
-                border: `2px solid ${sesi.pml_hadir ? "#1D9E75" : "#B0BAC6"}`,
-                backgroundColor: sesi.pml_hadir ? "#1D9E75" : "white",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-                transition: "all 0.15s",
-              }}
-            >
+            <div style={{
+              width: 20, height: 20, borderRadius: 6,
+              border: `2px solid ${sesi.pml_hadir ? "#1D9E75" : "#B0BAC6"}`,
+              backgroundColor: sesi.pml_hadir ? "#1D9E75" : "white",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0, transition: "all 0.15s",
+            }}>
               {sesi.pml_hadir && (
                 <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-                  <path
-                    d="M2 6l3 3 5-5"
-                    stroke="white"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               )}
             </div>
-            <span
-              style={{
-                fontSize: 13,
-                color: sesi.pml_hadir ? "#1D9E75" : "#4A5568",
-                fontWeight: sesi.pml_hadir ? 600 : 400,
-              }}
-            >
-              {sesi.pml_hadir
-                ? "PML datang berkunjung hari ini ✓"
-                : "PML datang berkunjung hari ini?"}
+            <span style={{ fontSize: 13, color: sesi.pml_hadir ? "#1D9E75" : "#4A5568", fontWeight: sesi.pml_hadir ? 600 : 400 }}>
+              {sesi.pml_hadir ? "PML datang berkunjung hari ini ✓" : "PML datang berkunjung hari ini?"}
             </span>
           </div>
         </div>
@@ -268,15 +252,12 @@ const DashboardPPL = () => {
         {MENU.map((m) => (
           <button
             key={m.key}
-            onClick={() => {
-              setActiveMenu(m.key);
-              setPesan({ text: "", type: "" });
-            }}
+            onClick={() => { setActiveMenu(m.key); setPesan({ text: "", type: "" }); }}
             style={{
               ...styles.menuBtn,
               backgroundColor: activeMenu === m.key ? m.color : "white",
-              color: activeMenu === m.key ? "white" : "#7A8899",
-              borderColor: activeMenu === m.key ? m.color : "#EBEEf2",
+              color:            activeMenu === m.key ? "white" : "#7A8899",
+              borderColor:      activeMenu === m.key ? m.color : "#EBEEf2",
             }}
           >
             {m.label}
@@ -291,74 +272,146 @@ const DashboardPPL = () => {
         </div>
 
         {pesan.text && (
-          <div
-            style={{
-              ...styles.pesan,
-              backgroundColor: pesan.type === "success" ? "#EDFAF4" : "#FEE2E2",
-              color: pesan.type === "success" ? "#1D9E75" : "#DC2626",
-            }}
-          >
+          <div style={{
+            ...styles.pesan,
+            backgroundColor: pesan.type === "success" ? "#EDFAF4" : "#FEE2E2",
+            color:            pesan.type === "success" ? "#1D9E75" : "#DC2626",
+          }}>
             {pesan.text}
           </div>
         )}
 
         <form onSubmit={handleSubmit}>
-          {/* Kecamatan */}
+          {/* Pilih SLS */}
           <div style={styles.field}>
-            <label style={styles.label}>Kecamatan</label>
-            <select
-              style={styles.input}
-              value={form.kecamatan}
-              onChange={(e) =>
-                setForm({ ...form, kecamatan: e.target.value, wilayah_id: "" })
-              }
-            >
-              <option value="">Pilih Kecamatan</option>
-              {kecamatanList.map((k) => (
-                <option key={k} value={k}>
-                  {k}
-                </option>
-              ))}
-            </select>
-          </div>
+            <label style={styles.label}>SLS</label>
 
-          {/* Kelurahan */}
-          <div style={styles.field}>
-            <label style={styles.label}>Kelurahan</label>
-            <select
+            {/* Trigger */}
+            <div
+              onClick={() => setSlsOpen((v) => !v)}
               style={{
                 ...styles.input,
-                color: !form.kecamatan ? "#B0BAC6" : "#2D3748",
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                cursor: "pointer", userSelect: "none",
+                borderColor: slsOpen ? activeColor : "#EBEEf2",
+                borderWidth:  slsOpen ? 1.5 : 1,
+                color: selectedSLS ? "#2D3748" : "#B0BAC6",
               }}
-              value={form.wilayah_id}
-              onChange={(e) => setForm({ ...form, wilayah_id: e.target.value })}
-              disabled={!form.kecamatan}
             >
-              <option value="">Pilih Kelurahan</option>
-              {kelurahanList.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.kelurahan}
-                </option>
-              ))}
-            </select>
+              <span style={{ fontSize: 13 }}>
+                {selectedSLS
+                  ? `${selectedSLS.kode_sls || "—"} — ${selectedSLS.kelurahan}`
+                  : "Pilih SLS"}
+              </span>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
+                style={{ transform: slsOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s", flexShrink: 0 }}>
+                <path d="M4 6l4 4 4-4" stroke="#9AA5B4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+
+            {/* Dropdown */}
+            {slsOpen && (
+              <div style={styles.slsDropdown}>
+                {wilayah.length === 0 ? (
+                  <div style={styles.slsEmpty}>Tidak ada SLS tersedia</div>
+                ) : (
+                  wilayah.map((w) => {
+                    const penuh   = isSLSPenuh(w);
+                    const progres = getProgres(w);
+                    const target  = parseInt(w.target || 0);
+                    const pct     = target > 0 ? Math.min((progres / target) * 100, 100) : 0;
+
+                    return (
+                      <div
+                        key={w.id}
+                        onClick={() => handlePilihSLS(w)}
+                        style={{
+                          ...styles.slsOption,
+                          backgroundColor:
+                            penuh ? "#FFF8F8"
+                            : form.wilayah_id === w.id ? "#F0F4FF"
+                            : "white",
+                          borderLeft:
+                            penuh ? "3px solid #FECACA"
+                            : form.wilayah_id === w.id ? `3px solid ${activeColor}`
+                            : "3px solid transparent",
+                          opacity: penuh ? 0.75 : 1,
+                          cursor:  penuh ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {/* Kode + badge */}
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
+                          <span style={styles.slsKode}>{w.kode_sls || "—"}</span>
+                          {penuh ? (
+                            <span style={styles.badgePenuh}>✓ Target Terpenuhi</span>
+                          ) : target > 0 ? (
+                            <span style={styles.badgeProgres}>{progres}/{target}</span>
+                          ) : null}
+                        </div>
+
+                        {/* Nama */}
+                        <div style={styles.slsNama}>
+                          {w.kelurahan}
+                          <span style={styles.slsKec}>, {w.kecamatan}</span>
+                        </div>
+
+                        {/* Progress bar */}
+                        {target > 0 && (
+                          <div style={styles.progressWrap}>
+                            <div style={{
+                              ...styles.progressBar,
+                              width: `${pct}%`,
+                              backgroundColor: penuh ? "#EF4444" : activeColor,
+                            }} />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+
+            {/* Preview SLS terpilih */}
+            {selectedSLS && (
+              <div style={styles.slsPreview}>
+                <div style={styles.slsPreviewRow}>
+                  <span style={styles.slsPreviewKey}>Kode SLS</span>
+                  <span style={styles.slsPreviewVal}>{selectedSLS.kode_sls || "—"}</span>
+                </div>
+                <div style={styles.slsPreviewRow}>
+                  <span style={styles.slsPreviewKey}>Kelurahan</span>
+                  <span style={styles.slsPreviewVal}>{selectedSLS.kelurahan}</span>
+                </div>
+                <div style={styles.slsPreviewRow}>
+                  <span style={styles.slsPreviewKey}>Kecamatan</span>
+                  <span style={styles.slsPreviewVal}>{selectedSLS.kecamatan}</span>
+                </div>
+                {selectedSLS.target > 0 && (
+                  <div style={{ ...styles.slsPreviewRow, borderBottom: "none", marginBottom: 0, paddingBottom: 0 }}>
+                    <span style={styles.slsPreviewKey}>Progres</span>
+                    <span style={{ ...styles.slsPreviewVal, color: activeColor, fontWeight: 600 }}>
+                      {getProgres(selectedSLS)} / {selectedSLS.target}
+                      <span style={{ fontSize: 10, fontWeight: 400, color: "#9AA5B4", marginLeft: 4 }}>
+                        (sisa {parseInt(selectedSLS.target) - getProgres(selectedSLS)})
+                      </span>
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Jumlah sesuai menu aktif */}
+          {/* Jumlah */}
           <div style={styles.field}>
             <label style={styles.label}>{fieldLabel[activeMenu]}</label>
             <input
-              style={{
-                ...styles.input,
-                borderColor: activeColor,
-                borderWidth: 1.5,
-              }}
+              style={{ ...styles.input, borderColor: activeColor, borderWidth: 1.5 }}
               type="number"
               min="1"
               placeholder="Masukkan jumlah"
               value={form[fieldKey[activeMenu]]}
-              onChange={(e) =>
-                setForm({ ...form, [fieldKey[activeMenu]]: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, [fieldKey[activeMenu]]: e.target.value })}
               required
             />
           </div>
@@ -379,9 +432,7 @@ const DashboardPPL = () => {
             style={{ ...styles.submitBtn, backgroundColor: activeColor }}
             disabled={submitLoading}
           >
-            {submitLoading
-              ? "Menyimpan..."
-              : `Simpan ${MENU.find((m) => m.key === activeMenu)?.label}`}
+            {submitLoading ? "Menyimpan..." : `Simpan ${MENU.find((m) => m.key === activeMenu)?.label}`}
           </button>
         </form>
       </div>
@@ -392,57 +443,27 @@ const DashboardPPL = () => {
           Riwayat — {MENU.find((m) => m.key === activeMenu)?.label}
         </div>
         {loading ? (
-          <p style={{ textAlign: "center", color: "#9AA5B4", fontSize: 13 }}>
-            Memuat...
-          </p>
+          <p style={{ textAlign: "center", color: "#9AA5B4", fontSize: 13 }}>Memuat...</p>
         ) : filteredInputs.length === 0 ? (
-          <p
-            style={{
-              textAlign: "center",
-              color: "#9AA5B4",
-              fontSize: 13,
-              padding: "20px 0",
-            }}
-          >
-            Belum ada data{" "}
-            {MENU.find((m) => m.key === activeMenu)?.label.toLowerCase()}.
+          <p style={{ textAlign: "center", color: "#9AA5B4", fontSize: 13, padding: "20px 0" }}>
+            Belum ada data {MENU.find((m) => m.key === activeMenu)?.label.toLowerCase()}.
           </p>
         ) : (
           filteredInputs.map((i) => (
             <div key={i.id} style={styles.inputItem}>
               <div style={styles.inputLeft}>
-                <div style={styles.inputWilayah}>
-                  {i.kelurahan}, {i.kecamatan}
-                </div>
+                <div style={styles.inputKodeSLS}>{i.kode_sls}</div>
+                <div style={styles.inputWilayah}>{i.kelurahan}, {i.kecamatan}</div>
                 <div style={styles.inputDate}>
-                  {new Date(i.tanggal).toLocaleDateString("id-ID", {
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })}
-                  {i.catatan && (
-                    <span style={{ color: "#B0BAC6" }}> · {i.catatan}</span>
-                  )}
+                  {new Date(i.tanggal).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
+                  {i.catatan && <span style={{ color: "#B0BAC6" }}> · {i.catatan}</span>}
                 </div>
               </div>
               <div style={{ textAlign: "right" }}>
-                <div
-                  style={{ fontSize: 22, fontWeight: 500, color: activeColor }}
-                >
-                  {activeMenu === "lapangan"
-                    ? i.ke_lapangan
-                    : activeMenu === "submit"
-                      ? i.submit
-                      : i.approve}
+                <div style={{ fontSize: 22, fontWeight: 500, color: activeColor }}>
+                  {activeMenu === "lapangan" ? i.ke_lapangan : activeMenu === "submit" ? i.submit : i.approve}
                 </div>
-                <div
-                  style={{
-                    fontSize: 9,
-                    color: "#9AA5B4",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
+                <div style={{ fontSize: 9, color: "#9AA5B4", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   {MENU.find((m) => m.key === activeMenu)?.label}
                 </div>
               </div>
@@ -455,154 +476,45 @@ const DashboardPPL = () => {
 };
 
 const styles = {
-  container: {
-    maxWidth: 480,
-    margin: "0 auto",
-    padding: "1rem",
-    backgroundColor: "#F0F2F5",
-    minHeight: "100vh",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#003366",
-    padding: "14px 16px",
-    borderRadius: 14,
-    marginBottom: 14,
-  },
+  container: { maxWidth: 480, margin: "0 auto", padding: "1rem", backgroundColor: "#F0F2F5", minHeight: "100vh" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#003366", padding: "14px 16px", borderRadius: 14, marginBottom: 14 },
   headerLeft: { display: "flex", alignItems: "center", gap: 10 },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: "50%",
-    backgroundColor: "#E8702A",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "white",
-    fontWeight: 500,
-    fontSize: 15,
-  },
+  avatar: { width: 36, height: 36, borderRadius: "50%", backgroundColor: "#E8702A", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 500, fontSize: 15 },
   headerName: { color: "white", fontWeight: 500, fontSize: 14 },
   headerRole: { color: "rgba(255,255,255,0.5)", fontSize: 11, marginTop: 2 },
-  logoutBtn: {
-    backgroundColor: "transparent",
-    border: "1px solid rgba(255,255,255,0.2)",
-    color: "rgba(255,255,255,0.7)",
-    padding: "6px 14px",
-    borderRadius: 8,
-    cursor: "pointer",
-    fontSize: 12,
-  },
+  logoutBtn: { backgroundColor: "transparent", border: "1px solid rgba(255,255,255,0.2)", color: "rgba(255,255,255,0.7)", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12 },
   statsRow: { display: "flex", gap: 10, marginBottom: 12 },
-  statCard: {
-    flex: 1,
-    backgroundColor: "white",
-    borderRadius: 12,
-    padding: "12px 10px",
-    textAlign: "center",
-    border: "1px solid #EBEEf2",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-  },
+  statCard: { flex: 1, backgroundColor: "white", borderRadius: 12, padding: "12px 10px", textAlign: "center", border: "1px solid #EBEEf2", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" },
   statNum: { fontSize: 24, fontWeight: 500 },
-  statLabel: {
-    fontSize: 10,
-    color: "#9AA5B4",
-    marginTop: 3,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-  },
+  statLabel: { fontSize: 10, color: "#9AA5B4", marginTop: 3, textTransform: "uppercase", letterSpacing: "0.05em" },
   menuRow: { display: "flex", gap: 8, marginBottom: 14 },
-  menuBtn: {
-    flex: 1,
-    padding: "9px 0",
-    border: "1px solid",
-    borderRadius: 10,
-    fontSize: 12,
-    fontWeight: 500,
-    cursor: "pointer",
-    transition: "all 0.15s",
-  },
-  card: {
-    backgroundColor: "white",
-    borderRadius: 14,
-    padding: "16px",
-    marginBottom: 14,
-    border: "1px solid #EBEEf2",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-  },
-  cardTitle: {
-    fontSize: 11,
-    fontWeight: 500,
-    textTransform: "uppercase",
-    letterSpacing: "0.07em",
-    marginBottom: 14,
-    paddingBottom: 10,
-    borderBottom: "1px solid #F0F2F5",
-    color: "#9AA5B4",
-  },
-  pesan: {
-    padding: "10px 14px",
-    borderRadius: 8,
-    marginBottom: 14,
-    fontSize: 13,
-    fontWeight: 500,
-  },
+  menuBtn: { flex: 1, padding: "9px 0", border: "1px solid", borderRadius: 10, fontSize: 12, fontWeight: 500, cursor: "pointer", transition: "all 0.15s" },
+  card: { backgroundColor: "white", borderRadius: 14, padding: "16px", marginBottom: 14, border: "1px solid #EBEEf2", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" },
+  cardTitle: { fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 14, paddingBottom: 10, borderBottom: "1px solid #F0F2F5", color: "#9AA5B4" },
+  pesan: { padding: "10px 14px", borderRadius: 8, marginBottom: 14, fontSize: 13, fontWeight: 500 },
   field: { marginBottom: 12 },
-  label: {
-    display: "block",
-    fontSize: 12,
-    fontWeight: 500,
-    color: "#4A5568",
-    marginBottom: 5,
-  },
-  input: {
-    width: "100%",
-    padding: "9px 12px",
-    border: "1px solid #EBEEf2",
-    borderRadius: 8,
-    fontSize: 13,
-    color: "#2D3748",
-    background: "#F7F8FA",
-    outline: "none",
-    boxSizing: "border-box",
-  },
-  submitBtn: {
-    width: "100%",
-    padding: "12px",
-    color: "white",
-    border: "none",
-    borderRadius: 10,
-    fontSize: 13,
-    fontWeight: 500,
-    cursor: "pointer",
-    marginTop: 4,
-  },
-  inputItem: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "10px 0",
-    borderBottom: "1px solid #F7F8FA",
-  },
+  label: { display: "block", fontSize: 12, fontWeight: 500, color: "#4A5568", marginBottom: 5 },
+  input: { width: "100%", padding: "9px 12px", border: "1px solid #EBEEf2", borderRadius: 8, fontSize: 13, color: "#2D3748", background: "#F7F8FA", outline: "none", boxSizing: "border-box" },
+  submitBtn: { width: "100%", padding: "12px", color: "white", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 500, cursor: "pointer", marginTop: 4 },
+  slsDropdown: { marginTop: 4, border: "1px solid #EBEEf2", borderRadius: 10, overflow: "hidden", boxShadow: "0 4px 16px rgba(0,0,0,0.08)", backgroundColor: "white", maxHeight: 260, overflowY: "auto" },
+  slsOption: { padding: "10px 14px", borderBottom: "1px solid #F7F8FA", transition: "background 0.1s" },
+  slsKode: { fontSize: 10, fontWeight: 600, color: "#9AA5B4", letterSpacing: "0.08em", textTransform: "uppercase" },
+  slsNama: { fontSize: 13, fontWeight: 500, color: "#2D3748" },
+  slsKec: { fontWeight: 400, color: "#9AA5B4" },
+  slsEmpty: { padding: "16px", textAlign: "center", color: "#B0BAC6", fontSize: 13 },
+  badgePenuh: { fontSize: 9, fontWeight: 700, color: "#DC2626", backgroundColor: "#FEE2E2", padding: "2px 8px", borderRadius: 20, letterSpacing: "0.04em" },
+  badgeProgres: { fontSize: 10, fontWeight: 500, color: "#9AA5B4" },
+  progressWrap: { marginTop: 6, height: 3, backgroundColor: "#F0F2F5", borderRadius: 99, overflow: "hidden" },
+  progressBar: { height: "100%", borderRadius: 99, transition: "width 0.3s" },
+  slsPreview: { marginTop: 8, padding: "10px 14px", backgroundColor: "#F7F8FA", borderRadius: 8, border: "1px solid #EBEEf2" },
+  slsPreviewRow: { display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 6, marginBottom: 6, borderBottom: "1px solid #EEF0F3" },
+  slsPreviewKey: { fontSize: 11, color: "#9AA5B4" },
+  slsPreviewVal: { fontSize: 12, fontWeight: 500, color: "#2D3748" },
+  inputItem: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #F7F8FA" },
   inputLeft: { flex: 1 },
-  inputWilayah: {
-    fontSize: 13,
-    fontWeight: 500,
-    color: "#2D3748",
-    marginBottom: 3,
-  },
+  inputKodeSLS: { fontSize: 9, fontWeight: 600, color: "#B0BAC6", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 },
+  inputWilayah: { fontSize: 13, fontWeight: 500, color: "#2D3748", marginBottom: 3 },
   inputDate: { fontSize: 11, color: "#9AA5B4" },
-  sesiInfo: { display: "flex", alignItems: "center", gap: 6, marginTop: 4 },
-  sesiDot: {
-    width: 6,
-    height: 6,
-    borderRadius: "50%",
-    backgroundColor: "#1D9E75",
-    flexShrink: 0,
-  },
-  sesiText: { fontSize: 11, color: "#9AA5B4", fontStyle: "italic" },
 };
 
 export default DashboardPPL;

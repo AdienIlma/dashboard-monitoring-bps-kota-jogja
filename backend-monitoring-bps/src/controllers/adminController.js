@@ -4,20 +4,56 @@ const bcrypt = require("bcryptjs");
 // GET semua user
 const getAllUsers = async (req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT id, nama, username, role, pml_id, created_at FROM users ORDER BY role, nama",
-    );
+    const result = await pool.query(`
+      SELECT
+        u.id,
+        u.nama,
+        u.username,
+        u.role,
+        u.pml_id,
+        u.nomor_whatsapp,
+        u.target,
+        u.created_at,
+        COALESCE(
+          ARRAY_AGG(us.wilayah_id)
+          FILTER (WHERE us.wilayah_id IS NOT NULL),
+          '{}'
+        ) AS wilayah_ids
+      FROM users u
+      LEFT JOIN user_sls us ON us.user_id = u.id
+      GROUP BY
+        u.id,
+        u.nama,
+        u.username,
+        u.role,
+        u.pml_id,
+        u.nomor_whatsapp,
+        u.target,
+        u.created_at
+      ORDER BY u.role, u.nama
+    `);
+
     res.json(result.rows);
-  } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Gagal ambil data user", error: err.message });
+  } catch (error) {
+    console.error('Error getAllUsers:', error);
+    res.status(500).json({
+      message: 'Gagal mengambil data user'
+    });
   }
 };
 
 // POST buat user baru
 const createUser = async (req, res) => {
-  const { nama, username, password, role, pml_id } = req.body;
+  const {
+    nama,
+    username,
+    password,
+    role,
+    pml_id,
+    nomor_whatsapp,
+    target,
+    wilayah_ids = []
+  } = req.body;
 
   if (!nama || !username || !password || !role) {
     return res.status(400).json({
@@ -34,9 +70,10 @@ const createUser = async (req, res) => {
   }
 
   try {
-    const cek = await pool.query("SELECT id FROM users WHERE username = $1", [
-      username,
-    ]);
+    const cek = await pool.query(
+      "SELECT id FROM users WHERE username = $1",
+      [username]
+    );
 
     if (cek.rows.length > 0) {
       return res.status(400).json({
@@ -48,15 +85,36 @@ const createUser = async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO users
-       (nama, username, password, role, pml_id)
-       VALUES ($1,$2,$3,$4,$5)
-       RETURNING id, nama, username, role, pml_id`,
-      [nama, username, hashed, role, pml_id || null],
+       (nama, username, password, role, pml_id, nomor_whatsapp, target)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, nama, username, role, pml_id, nomor_whatsapp, target`,
+      [
+        nama,
+        username,
+        hashed,
+        role,
+        role === "ppl" ? pml_id : null,
+        nomor_whatsapp || null,
+        Number(target) || 0
+      ]
     );
+
+    const user = result.rows[0];
+
+  if (role === "ppl" && Array.isArray(wilayah_ids)) {
+    for (const wilayahId of wilayah_ids) {
+      await pool.query(
+        `INSERT INTO user_sls (user_id, wilayah_id)
+         VALUES ($1, $2)
+         ON CONFLICT (user_id, wilayah_id) DO NOTHING`,
+        [user.id, wilayahId]
+      );
+   }
+  }
 
     res.status(201).json({
       message: "User berhasil dibuat",
-      user: result.rows[0],
+      result,
     });
   } catch (err) {
     res.status(500).json({
@@ -116,7 +174,7 @@ const getDashboardProgress = async (req, res) => {
       FROM input_harian
     `);
 
-    const totalTarget = 97000;
+    const totalTarget = 10;
     const lapanganVal = result.rows[0].lapangan;
     const submitVal = result.rows[0].submit;
     const approveVal = result.rows[0].approve;
@@ -314,16 +372,21 @@ const getDashboardPetugasDetail = async (req, res) => {
         u.nama,
         u.role AS tipe,
         u.pml_id,
-        u.target,
+
+        -- Target dari SLS yang di-assign ke PPL via user_sls
+        COALESCE((
+          SELECT SUM(w.target)
+          FROM user_sls us
+          JOIN wilayah w ON w.id = us.wilayah_id
+          WHERE us.user_id = u.id
+        ), u.target, 0) AS target,
 
         COALESCE(SUM(i.ke_lapangan), 0) AS sudah_ke_lapangan,
         COALESCE(SUM(i.submit), 0)       AS submit,
         COALESCE(SUM(i.approve), 0)      AS approve,
 
-        -- Untuk PPL: berapa hari pml_hadir=true milik mereka sendiri
         COUNT(DISTINCT CASE WHEN i.pml_hadir = TRUE THEN i.tanggal END) AS jumlah_hadir,
 
-        -- Untuk PML: hitung dari semua PPL bawahannya
         (
           SELECT COUNT(DISTINCT ih.tanggal)
           FROM input_harian ih
@@ -335,7 +398,7 @@ const getDashboardPetugasDetail = async (req, res) => {
       FROM users u
       LEFT JOIN input_harian i ON i.ppl_id = u.id
       WHERE u.role IN ('pml', 'ppl')
-      GROUP BY u.id, u.nama, u.role, u.pml_id, u.target
+      GROUP BY u.id, u.nama, u.role, u.pml_id
       ORDER BY u.role, u.nama
     `);
 
@@ -356,10 +419,7 @@ const getDashboardPetugasDetail = async (req, res) => {
       })),
     );
   } catch (err) {
-    res.status(500).json({
-      message: "Gagal ambil detail petugas",
-      error: err.message,
-    });
+    res.status(500).json({ message: "Gagal ambil detail petugas", error: err.message });
   }
 };
 
@@ -374,7 +434,12 @@ const getDashboardPetugasDetailHarian = async (req, res) => {
         u.nama,
         u.role AS tipe,
         u.pml_id,
-        u.target,
+        COALESCE((
+          SELECT SUM(w.target)
+          FROM user_sls us
+          JOIN wilayah w ON w.id = us.wilayah_id
+          WHERE us.user_id = u.id
+        ), u.target, 0) AS target,
 
         COALESCE(SUM(i.ke_lapangan), 0) AS sudah_ke_lapangan,
         COALESCE(SUM(i.submit), 0)       AS submit,
@@ -521,12 +586,21 @@ const getDashboardProgress15Hari = async (req, res) => {
 // UPDATE user
 const updateUser = async (req, res) => {
   const { id } = req.params;
-  const { nama, username, role, pml_id, password } = req.body;
+  const {
+    nama,
+    username,
+    role,
+    pml_id,
+    password,
+    nomor_whatsapp,
+    target,
+    wilayah_ids = []
+  } = req.body;
 
   try {
     const cek = await pool.query(
       "SELECT id FROM users WHERE username = $1 AND id != $2",
-      [username, id],
+      [username, id]
     );
 
     if (cek.rows.length > 0) {
@@ -534,6 +608,15 @@ const updateUser = async (req, res) => {
         message: "Username sudah digunakan",
       });
     }
+
+    const params = [
+      nama,
+      username,
+      role,
+      role === "ppl" ? pml_id : null,
+      nomor_whatsapp || null,
+      Number(target) || 0
+    ];
 
     if (password && password.trim() !== "") {
       const hashed = await bcrypt.hash(password, 10);
@@ -544,9 +627,11 @@ const updateUser = async (req, res) => {
              username = $2,
              role = $3,
              pml_id = $4,
-             password = $5
-         WHERE id = $6`,
-        [nama, username, role, role === "ppl" ? pml_id : null, hashed, id],
+             nomor_whatsapp = $5,
+             target = $6,
+             password = $7
+         WHERE id = $8`,
+        [...params, hashed, id]
       );
     } else {
       await pool.query(
@@ -554,12 +639,29 @@ const updateUser = async (req, res) => {
          SET nama = $1,
              username = $2,
              role = $3,
-             pml_id = $4
-         WHERE id = $5`,
-        [nama, username, role, role === "ppl" ? pml_id : null, id],
+             pml_id = $4,
+             nomor_whatsapp = $5,
+             target = $6
+         WHERE id = $7`,
+        [...params, id]
       );
     }
+await pool.query(
+  "DELETE FROM user_sls WHERE user_id = $1",
+  [id]
+);
 
+  if (role === "ppl" && Array.isArray(wilayah_ids)) {
+    for (const wilayahId of wilayah_ids) {
+      await pool.query(
+        `INSERT INTO user_sls (user_id, wilayah_id)
+        VALUES ($1, $2)
+        ON CONFLICT (user_id, wilayah_id) DO NOTHING`,
+        [id, wilayahId]
+      );
+    }
+  }
+  
     res.json({ message: "User berhasil diupdate" });
   } catch (err) {
     res.status(500).json({
@@ -594,41 +696,59 @@ const getWilayah = async (req, res) => {
       SELECT
         w.*,
         pml.nama AS nama_pml,
-        ppl.nama AS nama_ppl
+        ppl.nama AS nama_ppl,
+        us.user_id AS ppl_id_sls
       FROM wilayah w
       LEFT JOIN users pml ON w.pml_id = pml.id
-      LEFT JOIN users ppl ON w.ppl_id = ppl.id
+      LEFT JOIN user_sls us ON us.wilayah_id = w.id
+      LEFT JOIN users ppl ON us.user_id = ppl.id
       ORDER BY w.kecamatan, w.kelurahan
     `);
 
-    res.json(result.rows);
+    // Kalau 1 wilayah punya beberapa PPL (user_sls), akan ada duplikat row.
+    // Kita return as-is, ProgressPetugas sudah filter by ppl_id
+    res.json(result.rows.map(r => ({
+      ...r,
+      ppl_id: r.ppl_id_sls ?? r.ppl_id, // prioritaskan user_sls
+    })));
   } catch (err) {
-    res.status(500).json({
-      message: "Gagal ambil wilayah",
-      error: err.message,
-    });
+    res.status(500).json({ message: "Gagal ambil wilayah", error: err.message });
   }
 };
 
 // CREATE wilayah
 const createWilayah = async (req, res) => {
-  const { kecamatan, kelurahan, pml_id, ppl_id } = req.body;
+  const {
+    kode_sls,
+    kecamatan,
+    kelurahan,
+    pml_id,
+    ppl_id,
+    target
+  } = req.body;
 
   try {
     await pool.query(
       `INSERT INTO wilayah
-       (kecamatan, kelurahan, pml_id, ppl_id)
-       VALUES ($1,$2,$3,$4)`,
-      [kecamatan, kelurahan, pml_id || null, ppl_id || null],
+       (kode_sls, kecamatan, kelurahan, pml_id, ppl_id, target)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        kode_sls || null,
+        kecamatan,
+        kelurahan,
+        pml_id || null,
+        ppl_id || null,
+        Number(target) || 0
+      ]
     );
 
     res.json({
-      message: "Wilayah berhasil ditambahkan",
+      message: 'Wilayah berhasil ditambahkan'
     });
   } catch (err) {
     res.status(500).json({
-      message: "Gagal tambah wilayah",
-      error: err.message,
+      message: 'Gagal tambah wilayah',
+      error: err.message
     });
   }
 };
@@ -636,26 +756,43 @@ const createWilayah = async (req, res) => {
 // UPDATE wilayah
 const updateWilayah = async (req, res) => {
   const { id } = req.params;
-  const { kecamatan, kelurahan, pml_id, ppl_id } = req.body;
+  const {
+    kode_sls,
+    kecamatan,
+    kelurahan,
+    pml_id,
+    ppl_id,
+    target
+  } = req.body;
 
   try {
     await pool.query(
       `UPDATE wilayah
-       SET kecamatan = $1,
-           kelurahan = $2,
-           pml_id = $3,
-           ppl_id = $4
-       WHERE id = $5`,
-      [kecamatan, kelurahan, pml_id || null, ppl_id || null, id],
+       SET kode_sls = $1,
+           kecamatan = $2,
+           kelurahan = $3,
+           pml_id = $4,
+           ppl_id = $5,
+           target = $6
+       WHERE id = $7`,
+      [
+        kode_sls || null,
+        kecamatan,
+        kelurahan,
+        pml_id || null,
+        ppl_id || null,
+        Number(target) || 0,
+        id
+      ]
     );
 
     res.json({
-      message: "Wilayah berhasil diupdate",
+      message: 'Wilayah berhasil diupdate'
     });
   } catch (err) {
     res.status(500).json({
-      message: "Gagal update wilayah",
-      error: err.message,
+      message: 'Gagal update wilayah',
+      error: err.message
     });
   }
 };

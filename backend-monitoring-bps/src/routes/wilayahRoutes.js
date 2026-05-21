@@ -3,12 +3,40 @@ const router = express.Router();
 const { authenticate } = require('../middleware/auth');
 const pool = require('../config/db');
 
-// GET semua wilayah (bisa diakses semua role)
+// GET semua wilayah
 router.get('/', authenticate, async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT * FROM wilayah ORDER BY kecamatan, kelurahan'
-    );
+    let result;
+
+    if (req.user.role === 'ppl') {
+      // PPL: hanya SLS milik mereka via user_sls
+      result = await pool.query(
+        `SELECT
+          w.*,
+          us.user_id                          AS ppl_id,
+          COALESCE(SUM(i.ke_lapangan), 0)     AS total_lapangan,
+          COALESCE(SUM(i.submit), 0)          AS total_submit,
+          COALESCE(SUM(i.approve), 0)         AS total_approve
+        FROM wilayah w
+        JOIN user_sls us ON us.wilayah_id = w.id
+        LEFT JOIN input_harian i ON i.wilayah_id = w.id
+        WHERE us.user_id = $1
+        GROUP BY w.id, us.user_id
+        ORDER BY w.kecamatan, w.kelurahan`,
+        [req.user.id]
+      );
+    } else {
+      // Admin & PML: semua wilayah + ppl_id dari user_sls
+      result = await pool.query(
+        `SELECT
+          w.*,
+          us.user_id AS ppl_id
+        FROM wilayah w
+        LEFT JOIN user_sls us ON us.wilayah_id = w.id
+        ORDER BY w.kecamatan, w.kelurahan`
+      );
+    }
+
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ message: 'Gagal ambil wilayah', error: err.message });

@@ -4,7 +4,7 @@ const getMyInputs = async (req, res) => {
   try {
     const result = await pool.query(
       `
-      SELECT i.*, w.kecamatan, w.kelurahan
+      SELECT i.*, w.kecamatan, w.kelurahan, w.kode_sls  -- tambah kode_sls
       FROM input_harian i
       JOIN wilayah w ON i.wilayah_id = w.id
       WHERE i.ppl_id = $1

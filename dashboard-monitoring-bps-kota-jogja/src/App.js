@@ -179,62 +179,89 @@ function AdminDashboard() {
   const [error, setError] = useState("");
   const [petugasHarianData, setPetugasHarianData] = useState([]);
   const [wilayahList, setWilayahList] = useState([]);
+  const [showNavbar, setShowNavbar] = useState(false);
 
   const stableLogout = useCallback(() => logout(), [logout]);
 
   // App.js — ganti useEffect fetchPetugasHarian
   useEffect(() => {
-    const fetchHarian = async () => {
-      try {
-        const [harianKecamatan, harianPetugas, detailTotal] = await Promise.all(
-          [
-            getKecamatanHarianData(tanggalHarian),
-            getPetugasDetailHarian(tanggalHarian),
-            getPetugasDetail(),
-          ],
-        );
-        setKecamatanHarianData(harianKecamatan);
-        setPetugasHarianData(harianPetugas);
-        setPetugasDetailData(detailTotal);
-      } catch (err) {
-        console.error("Gagal fetch harian:", err);
-      }
-    };
-    fetchHarian();
+  const fetchHarian = async () => {
+    try {
+      const [harianKecamatan, harianPetugas, detailTotal] = await Promise.all([
+        getKecamatanHarianData(tanggalHarian),
+        getPetugasDetailHarian(tanggalHarian),
+        getPetugasDetail(),
+      ]);
+
+      setKecamatanHarianData(harianKecamatan);
+      setPetugasHarianData(harianPetugas);
+      setPetugasDetailData(detailTotal);
+    } catch (err) {
+      console.error("Gagal fetch harian:", err);
+    }
+  };
+
+  fetchHarian();
+
+  const interval = setInterval(fetchHarian, 5000);
+
+  return () => clearInterval(interval);
   }, [tanggalHarian]);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [petugas, progress, kecamatan, progress15, wilayah] =
-          await Promise.all([
-            getPetugasData(),
-            getProgressData(),
-            getKecamatanData(),
-            getProgress15Hari(),
-            getWilayahData(),
-          ]);
+  const fetchData = async () => {
+    try {
+      const [petugas, progress, kecamatan, progress15, wilayah] =
+        await Promise.all([
+          getPetugasData(),
+          getProgressData(),
+          getKecamatanData(),
+          getProgress15Hari(),
+          getWilayahData(),
+        ]);
 
-        setPetugasData(petugas);
-        setProgressData(progress);
-        setKecamatanData(kecamatan);
-        setProgress15HariData(progress15);
-        setWilayahList(wilayah);
-      } catch (err) {
-        if (err.response?.status === 401) {
-          stableLogout();
-        } else {
-          setError("Gagal memuat data dashboard");
-        }
+      setPetugasData(petugas);
+      setProgressData(progress);
+      setKecamatanData(kecamatan);
+      setProgress15HariData(progress15);
+      setWilayahList(wilayah);
+    } catch (err) {
+      if (err.response?.status === 401) {
+        stableLogout();
+      } else {
+        setError("Gagal memuat data dashboard");
       }
-    };
-    fetchData();
+    }
+  };
+
+  fetchData();
+
+  const interval = setInterval(fetchData, 5000);
+
+  return () => clearInterval(interval);
   }, [stableLogout]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+      <div
+  onMouseEnter={() => setShowNavbar(true)}
+  style={{
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 8,
+    zIndex: 9999,
+  }}
+/>
       {/* Navbar */}
-      <div style={navStyles.nav}>
+<div
+  style={{
+    ...navStyles.nav,
+    transform: showNavbar ? "translateY(0)" : "translateY(-100%)",
+  }}
+  onMouseLeave={() => setShowNavbar(false)}
+>
         <span style={navStyles.title}>
           📊 Dashboard Monitoring BPS Kota Yogyakarta
         </span>
@@ -292,7 +319,7 @@ function AdminDashboard() {
           </div>
           <div className="center">
             <PetugasLapangan data={petugasData} />
-            <PetaSebaranPetugas />
+            <PetaSebaranPetugas wilayahData={wilayahList} />
             <Progress15Hari data={progress15HariData} />
           </div>
           <div className="right">
@@ -324,37 +351,81 @@ function AdminDashboard() {
 
 const navStyles = {
   nav: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 9998,
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#1e3a5f",
+    background: "rgba(30, 58, 95, 0.96)",
+    backdropFilter: "blur(12px)",
     padding: "0 1.5rem",
     color: "white",
     height: 56,
+    boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+    transition: "transform 0.25s ease",
   },
-  title: { fontWeight: "700", fontSize: "0.95rem", whiteSpace: "nowrap" },
-  tabs: { display: "flex", gap: 4 },
+
+  title: {
+    fontWeight: "800",
+    fontSize: "0.95rem",
+    whiteSpace: "nowrap",
+    letterSpacing: "0.02em",
+  },
+
+  tabs: {
+    display: "flex",
+    gap: 6,
+    background: "rgba(255,255,255,0.08)",
+    padding: 4,
+    borderRadius: 10,
+  },
+
   tab: {
-    padding: "6px 16px",
+    padding: "8px 16px",
     border: "none",
-    borderRadius: 6,
+    borderRadius: 8,
     fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
     background: "transparent",
-    color: "rgba(255,255,255,0.7)",
+    color: "rgba(255,255,255,0.75)",
+    transition: "all 0.2s ease",
   },
-  tabActive: { background: "rgba(255,255,255,0.2)", color: "white" },
-  right: { display: "flex", alignItems: "center", gap: "1rem" },
-  nama: { fontSize: "0.9rem", opacity: 0.9, whiteSpace: "nowrap" },
-  logoutBtn: {
-    backgroundColor: "transparent",
-    border: "1px solid white",
-    color: "white",
-    padding: "5px 12px",
-    borderRadius: "6px",
-    cursor: "pointer",
+
+  tabActive: {
+    background: "white",
+    color: "#1e3a5f",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+  },
+
+  right: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
+  },
+
+  nama: {
     fontSize: "0.85rem",
+    opacity: 0.9,
+    whiteSpace: "nowrap",
+    background: "rgba(255,255,255,0.08)",
+    padding: "6px 10px",
+    borderRadius: 8,
+  },
+
+  logoutBtn: {
+    backgroundColor: "#ef4444",
+    border: "none",
+    color: "white",
+    padding: "7px 14px",
+    borderRadius: 8,
+    cursor: "pointer",
+    fontSize: "0.8rem",
+    fontWeight: 700,
+    transition: "all 0.2s ease",
   },
 };
 
