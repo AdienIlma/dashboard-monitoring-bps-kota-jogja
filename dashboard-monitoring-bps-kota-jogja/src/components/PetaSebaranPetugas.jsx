@@ -1,8 +1,21 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Tooltip } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { getSebaranPetugas } from "../services/dataService";
+
+// ─── FlyToMarker: terbang ke koordinat target saat search berubah ──────────
+// Pakai lat/lng primitive + key unik agar useEffect selalu trigger
+const FlyToMarker = ({ lat, lng, triggerKey }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (lat != null && lng != null) {
+      map.flyTo([lat, lng], 16, { animate: true, duration: 0.8 });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [triggerKey]);
+  return null;
+};
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -448,6 +461,7 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
   const [filterKelurahan, setFilterKelurahan] = useState("");
   const [filterPML, setFilterPML] = useState("");
   const [search, setSearch] = useState("");
+  const [flyTarget, setFlyTarget] = useState(null); // { lat, lng, key }
 
   const fetchData = useCallback(async () => {
     try {
@@ -470,52 +484,127 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
   const pmlOnline = pmlList.filter((p) => p.online).length;
   const pplOnline = pplList.filter((p) => p.online).length;
 
-  const kecamatanOptions = [...new Set(sebaranData.map((p) => p.kecamatan).filter(Boolean))]
-    .sort().map((k) => ({ value: k, label: k }));
+  // ── SLS valid dari wilayahData ─────────────────────────────────────────
+  const slsData = (wilayahData || []).filter(
+    (w) => w.kode_sls && w.kode_sls.trim() !== ""
+  );
 
-  const kelurahanOptions = [...new Set(
-    sebaranData
-      .filter((p) => !filterKecamatan || p.kecamatan === filterKecamatan)
-      .map((p) => p.kelurahan).filter(Boolean),
-  )].sort().map((k) => ({ value: k, label: k }));
+  // ── Opsi Kecamatan & Kelurahan dari SLS ───────────────────────────────
+  const kecamatanOptions = [
+    ...new Set(slsData.map((w) => w.kecamatan).filter(Boolean)),
+  ]
+    .sort()
+    .map((k) => ({ value: k, label: k }));
+
+  const kelurahanOptions = [
+    ...new Set(
+      slsData
+        .filter((w) => !filterKecamatan || w.kecamatan === filterKecamatan)
+        .map((w) => w.kelurahan)
+        .filter(Boolean)
+    ),
+  ]
+    .sort()
+    .map((k) => ({ value: k, label: k }));
+
+  // ── Opsi PML: juga ikut filter wilayah SLS ────────────────────────────
+  // Kumpulkan ppl_id yang punya SLS di wilayah terpilih, lalu ambil pml_id-nya
+  const pplIdsWithSLSInWilayah = filterKecamatan || filterKelurahan
+    ? new Set(
+        slsData
+          .filter((w) => {
+            const matchKec = !filterKecamatan || w.kecamatan === filterKecamatan;
+            const matchKel = !filterKelurahan || w.kelurahan === filterKelurahan;
+            return matchKec && matchKel;
+          })
+          .map((w) => w.ppl_id)
+      )
+    : null; // null = tidak ada filter wilayah aktif
+
+  const pmlIdsWithSLSInWilayah = pplIdsWithSLSInWilayah
+    ? new Set(
+        pplList
+          .filter((p) => pplIdsWithSLSInWilayah.has(p.id))
+          .map((p) => p.pml_id)
+      )
+    : null;
 
   const pmlSelectOptions = pmlList
-    .filter((p) => !filterKecamatan || p.kecamatan === filterKecamatan)
+    .filter((p) => !pmlIdsWithSLSInWilayah || pmlIdsWithSLSInWilayah.has(p.id))
     .map((p) => ({ value: String(p.id), label: p.nama }));
 
-  const handleKecamatanChange = (val) => {
-    setFilterKecamatan(val); setFilterKelurahan(""); setFilterPML(""); setSelectedPML(null);
+  // ── Helper: apakah PML/PPL lolos filter wilayah SLS? ─────────────────
+  const pmlLulusFilterWilayah = (pml) => {
+    if (!pmlIdsWithSLSInWilayah) return true;
+    return pmlIdsWithSLSInWilayah.has(pml.id);
   };
 
+  const pplLulusFilterWilayah = (ppl) => {
+    if (!pplIdsWithSLSInWilayah) return true;
+    return pplIdsWithSLSInWilayah.has(ppl.id);
+  };
+
+  // ── Handler kecamatan: reset kelurahan, PML, selectedPML ─────────────
+  const handleKecamatanChange = (val) => {
+    setFilterKecamatan(val);
+    setFilterKelurahan("");
+    setFilterPML("");
+    setSelectedPML(null);
+  };
+
+  const handleKelurahanChange = (val) => {
+    setFilterKelurahan(val);
+    setFilterPML("");
+    setSelectedPML(null);
+  };
+
+  // ── Filter marker PML di peta ─────────────────────────────────────────
   const filteredPML = pmlList.filter((p) => {
     if (p.lat == null || p.lng == null) return false;
-    if (filterKecamatan && p.kecamatan !== filterKecamatan) return false;
-    if (filterKelurahan && p.kelurahan !== filterKelurahan) return false;
     if (filterPML && String(p.id) !== filterPML) return false;
     if (search && !p.nama.toLowerCase().includes(search.toLowerCase())) return false;
+    // Filter utama: PML punya PPL dengan SLS di wilayah terpilih
+    if (!pmlLulusFilterWilayah(p)) return false;
     return true;
   });
 
+  // ── Filter marker PPL di peta (hanya online, sudah kirim lokasi, dan
+  //    dipilih lewat selectedPML) ──────────────────────────────────────
   const filteredPPL = pplList.filter((p) => {
+    if (!p.online || !p.punya_lokasi) return false;
+    if (!selectedPML || p.pml_id !== selectedPML) return false;
+    if (!pplLulusFilterWilayah(p)) return false;
     const q = search.toLowerCase();
-    return (
-      p.online && p.punya_lokasi && selectedPML && p.pml_id === selectedPML &&
-      (!filterKecamatan || p.kecamatan === filterKecamatan) &&
-      (!filterKelurahan || p.kelurahan === filterKelurahan) &&
-      (!search || p.nama.toLowerCase().includes(q) ||
-        (p.kecamatan || "").toLowerCase().includes(q) ||
-        (p.kelurahan || "").toLowerCase().includes(q))
-    );
+    if (search && !(
+      p.nama.toLowerCase().includes(q) ||
+      (p.kecamatan || "").toLowerCase().includes(q) ||
+      (p.kelurahan || "").toLowerCase().includes(q)
+    )) return false;
+    return true;
   });
 
   const resetFilter = () => {
     setFilterKecamatan(""); setFilterKelurahan(""); setFilterPML("");
-    setSearch(""); setSelectedPML(null);
+    setSearch(""); setSelectedPML(null); setFlyTarget(null);
   };
 
   const adaFilter = filterKecamatan || filterKelurahan || filterPML || search;
 
-  // ── Navigasi detail ───────────────────────────────────────────────────────
+  // ── Auto fly ke marker saat search berubah ────────────────────────────
+  useEffect(() => {
+    if (!search.trim()) { setFlyTarget(null); return; }
+    const q = search.toLowerCase();
+    const candidates = sebaranData.filter(
+      (p) => p.lat != null && p.lng != null && p.nama.toLowerCase().includes(q)
+    );
+    if (candidates.length === 0) { setFlyTarget(null); return; }
+    const exact = candidates.find((p) => p.nama.toLowerCase() === q);
+    const match = exact ?? candidates[0];
+    // key = Date.now() memastikan useEffect di FlyToMarker selalu re-trigger
+    setFlyTarget({ lat: match.lat, lng: match.lng, key: Date.now() });
+  }, [search, sebaranData]);
+
+  // ── Navigasi detail ────────────────────────────────────────────────────
   const openDetail = (petugas) => {
     if (detailPetugas) {
       setDetailHistory((h) => [...h, detailPetugas]);
@@ -533,7 +622,7 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
     }
   };
 
-  // ── Mode detail ───────────────────────────────────────────────────────────
+  // ── Mode detail ────────────────────────────────────────────────────────
   if (detailPetugas) {
     return (
       <DetailPetugas
@@ -573,25 +662,43 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
 
       {/* Filter bar */}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        {/* Search */}
         <div style={{ position: "relative", flex: 2, minWidth: 120 }}>
           <svg width="11" height="11" viewBox="0 0 11 11" fill="none"
             style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
             <circle cx="4.5" cy="4.5" r="3.5" stroke="#B0BAC6" strokeWidth="1.3" />
             <path d="M7.5 7.5L9.5 9.5" stroke="#B0BAC6" strokeWidth="1.3" strokeLinecap="round" />
           </svg>
-          <input type="text" placeholder="Cari nama, kecamatan, kelurahan..."
+          <input type="text" placeholder="Cari nama petugas..."
             value={search} onChange={(e) => setSearch(e.target.value)}
             style={{ ...baseInputStyle, paddingLeft: 26, width: "100%", boxSizing: "border-box", cursor: "text" }}
           />
         </div>
-        <SearchableSelect value={filterKecamatan} onChange={handleKecamatanChange} options={kecamatanOptions} placeholder="Semua Kecamatan" />
-        <SearchableSelect value={filterKelurahan} onChange={setFilterKelurahan} options={kelurahanOptions} placeholder="Semua Kelurahan" />
+
+        {/* Kecamatan — dari SLS */}
+        <SearchableSelect
+          value={filterKecamatan}
+          onChange={handleKecamatanChange}
+          options={kecamatanOptions}
+          placeholder="Semua Kecamatan"
+        />
+
+        {/* Kelurahan — dari SLS, bergantung kecamatan */}
+        <SearchableSelect
+          value={filterKelurahan}
+          onChange={handleKelurahanChange}
+          options={kelurahanOptions}
+          placeholder="Semua Kelurahan"
+        />
+
+        {/* PML — ikut filter wilayah */}
         <SearchableSelect
           value={filterPML}
           onChange={(val) => { setFilterPML(val); setSelectedPML(null); }}
           options={pmlSelectOptions}
           placeholder="Semua PML"
         />
+
         {(adaFilter || selectedPML) && (
           <button onClick={resetFilter} style={{
             fontSize: 10, padding: "4px 10px", border: "1px solid #EBEEf2",
@@ -602,6 +709,25 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
           </button>
         )}
       </div>
+
+      {/* Info chip wilayah aktif */}
+      {(filterKecamatan || filterKelurahan) && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 6,
+          background: "#EEF5FF", border: "1px solid #C7DEFF",
+          borderRadius: 8, padding: "4px 10px",
+        }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+            stroke="#003366" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="10" r="3" />
+            <path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 14-8 14S4 15.25 4 10a8 8 0 0 1 8-8z" />
+          </svg>
+          <span style={{ fontSize: 10, color: "#003366", fontWeight: 500 }}>
+            Menampilkan petugas dengan SLS di:{" "}
+            {[filterKelurahan, filterKecamatan].filter(Boolean).join(", ")}
+          </span>
+        </div>
+      )}
 
       {/* Legend */}
       <div style={{
@@ -639,6 +765,7 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
         <MapContainer center={[-7.801389, 110.364444]} zoom={13}
           style={{ height: "100%", width: "100%" }} scrollWheelZoom={false}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap" />
+          {flyTarget && <FlyToMarker lat={flyTarget.lat} lng={flyTarget.lng} triggerKey={flyTarget.key} />}
 
           {/* Marker PML */}
           {filteredPML.map((pml) => (
@@ -648,7 +775,6 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
               icon={pml.online ? pmlOnlineIcon : pmlOfflineIcon}
               eventHandlers={{ click: () => setSelectedPML(selectedPML === pml.id ? null : pml.id) }}
             >
-              {/* Tooltip hover */}
               <Tooltip direction="top" offset={[0, -36]} opacity={1}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: "#1A2B42", whiteSpace: "nowrap" }}>
                   {pml.nama}
@@ -658,7 +784,6 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
                 </div>
               </Tooltip>
 
-              {/* Popup klik */}
               <Popup>
                 <div style={{ fontSize: 12, minWidth: 180 }}>
                   <div style={{ fontWeight: 600, color: "#1A2B42", marginBottom: 4 }}>{pml.nama}</div>
@@ -711,7 +836,6 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
           {/* Marker PPL */}
           {filteredPPL.map((ppl) => (
             <Marker key={`ppl-${ppl.id}`} position={[ppl.lat, ppl.lng]} icon={pplOnlineIcon}>
-              {/* Tooltip hover */}
               <Tooltip direction="top" offset={[0, -36]} opacity={1}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: "#1A2B42", whiteSpace: "nowrap" }}>
                   {ppl.nama}
@@ -721,7 +845,6 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
                 </div>
               </Tooltip>
 
-              {/* Popup klik */}
               <Popup>
                 <div style={{ fontSize: 12, minWidth: 180 }}>
                   <div style={{ fontWeight: 600, color: "#1A2B42", marginBottom: 4 }}>{ppl.nama}</div>
@@ -731,10 +854,7 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
                     </div>
                   )}
                   <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
-                    <span style={{
-                      width: 7, height: 7, borderRadius: "50%",
-                      background: "#1D9E75", display: "inline-block",
-                    }} />
+                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#1D9E75", display: "inline-block" }} />
                     <span style={{ fontSize: 11, color: "#1D9E75", fontWeight: 500 }}>Online</span>
                   </div>
                   <div style={{ fontSize: 11, color: "#9AA5B4", marginBottom: 10 }}>

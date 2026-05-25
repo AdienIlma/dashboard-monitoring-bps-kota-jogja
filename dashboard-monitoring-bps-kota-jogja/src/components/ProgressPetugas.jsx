@@ -72,7 +72,10 @@ const SearchableSelect = ({ value, onChange, options, placeholder }) => {
         </span>
         <svg
           width="10" height="10" viewBox="0 0 10 10" fill="none"
-          style={{ flexShrink: 0, marginLeft: 4, transition: "transform .15s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
+          style={{
+            flexShrink: 0, marginLeft: 4, transition: "transform .15s",
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+          }}
         >
           <path d="M2 3.5L5 6.5L8 3.5" stroke="#9AA5B4" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -153,7 +156,7 @@ const ProgressPetugas = ({
   const [activeTab, setActiveTab] = useState("total");
   const [search, setSearch] = useState("");
   const [expandedPML, setExpandedPML] = useState({});
-  const [expandedPPL, setExpandedPPL] = useState({});   // ← expand SLS per PPL
+  const [expandedPPL, setExpandedPPL] = useState({});
   const [filterKecamatan, setFilterKecamatan] = useState("");
   const [filterKelurahan, setFilterKelurahan] = useState("");
   const [filterPML, setFilterPML] = useState("");
@@ -163,44 +166,85 @@ const ProgressPetugas = ({
   const pplList = rawData.filter((p) => p.tipe === "PPL");
   const allPML  = rawData.filter((p) => p.tipe === "PML");
 
-  // wilayahData sudah include field: id, kecamatan, kelurahan, kode_sls, target, ppl_id, pml_id
+  // SLS valid (punya kode_sls)
   const slsData = (wilayahData || []).filter((w) => w.kode_sls && w.kode_sls.trim() !== "");
 
-  const kecamatanOptions = wilayahData
-    ? [...new Set(wilayahData.map((w) => w.kecamatan).filter(Boolean))].sort().map((k) => ({ value: k, label: k }))
-    : [];
+  // ── Opsi filter dari wilayahData (SLS) ──────────────────────────────────
+  // Kecamatan: semua kecamatan yang ada di SLS
+  const kecamatanOptions = [
+    ...new Set(slsData.map((w) => w.kecamatan).filter(Boolean)),
+  ]
+    .sort()
+    .map((k) => ({ value: k, label: k }));
 
-  const kelurahanOptions = wilayahData
-    ? [...new Set(
-        wilayahData
-          .filter((w) => !filterKecamatan || w.kecamatan === filterKecamatan)
-          .map((w) => w.kelurahan)
-          .filter(Boolean),
-      )].sort().map((k) => ({ value: k, label: k }))
-    : [];
+  // Kelurahan: hanya kelurahan yang SLS-nya ada di kecamatan terpilih
+  const kelurahanOptions = [
+    ...new Set(
+      slsData
+        .filter((w) => !filterKecamatan || w.kecamatan === filterKecamatan)
+        .map((w) => w.kelurahan)
+        .filter(Boolean),
+    ),
+  ]
+    .sort()
+    .map((k) => ({ value: k, label: k }));
 
   const pmlOptions = allPML.map((p) => ({ value: String(p.id), label: p.nama }));
 
-  const petugasMatchWilayah = (petugas, isPPL) => {
-    if (!wilayahData || (!filterKecamatan && !filterKelurahan)) return true;
-    return wilayahData.some((w) => {
-      const matchKec = !filterKecamatan || w.kecamatan === filterKecamatan;
-      const matchKel = !filterKelurahan || w.kelurahan === filterKelurahan;
-      const matchPetugas = isPPL ? w.ppl_id === petugas.id : w.pml_id === petugas.id;
-      return matchKec && matchKel && matchPetugas;
-    });
+  // ── Cek apakah petugas punya SLS di kecamatan/kelurahan terpilih ─────────
+  /**
+   * Kembalikan true jika petugas (PML atau PPL) memiliki minimal 1 SLS
+   * yang cocok dengan filter kecamatan & kelurahan yang sedang aktif.
+   *
+   * Logika:
+   *  - Jika tidak ada filter wilayah aktif → selalu lolos.
+   *  - PPL: cek langsung di slsData berdasarkan ppl_id.
+   *  - PML: cek lewat PPL yang berada di bawah PML tersebut,
+   *          atau langsung lewat pml_id jika wilayahData menyimpannya.
+   */
+  const petugasMemilikiSLSDiWilayah = (petugas, isPPL) => {
+    if (!filterKecamatan && !filterKelurahan) return true;
+
+    const matchSLS = (sls) => {
+      const matchKec = !filterKecamatan || sls.kecamatan === filterKecamatan;
+      const matchKel = !filterKelurahan || sls.kelurahan === filterKelurahan;
+      return matchKec && matchKel;
+    };
+
+    if (isPPL) {
+      // PPL: ada SLS milik PPL ini yang cocok filter?
+      return slsData.some((sls) => sls.ppl_id === petugas.id && matchSLS(sls));
+    } else {
+      // PML: ada PPL di bawah PML ini yang punya SLS cocok?
+      const pplIdsBawahPML = pplList
+        .filter((p) => p.pml_id === petugas.id)
+        .map((p) => p.id);
+
+      return slsData.some(
+        (sls) => pplIdsBawahPML.includes(sls.ppl_id) && matchSLS(sls),
+      );
+    }
   };
 
+  // ── Handlers ──────────────────────────────────────────────────────────────
   const handleKecamatanChange = (val) => {
     setFilterKecamatan(val);
-    setFilterKelurahan("");
+    setFilterKelurahan(""); // reset kelurahan kalau kecamatan berubah
     setFilterPML("");
     setExpandedPML({});
     setExpandedPPL({});
   };
 
-  const togglePML = (pmlId) => setExpandedPML((prev) => ({ ...prev, [pmlId]: !prev[pmlId] }));
-  const togglePPL = (pplId) => setExpandedPPL((prev) => ({ ...prev, [pplId]: !prev[pplId] }));
+  const handleKelurahanChange = (val) => {
+    setFilterKelurahan(val);
+    setExpandedPML({});
+    setExpandedPPL({});
+  };
+
+  const togglePML = (pmlId) =>
+    setExpandedPML((prev) => ({ ...prev, [pmlId]: !prev[pmlId] }));
+  const togglePPL = (pplId) =>
+    setExpandedPPL((prev) => ({ ...prev, [pplId]: !prev[pplId] }));
 
   const resetFilter = () => {
     setFilterKecamatan("");
@@ -213,11 +257,13 @@ const ProgressPetugas = ({
 
   const adaFilter = filterKecamatan || filterKelurahan || filterPML || search;
 
+  // ── Filter PML untuk tabel ────────────────────────────────────────────────
   const filteredPML = pmlList
     .filter((pml) => {
       if (filterPML && String(pml.id) !== filterPML) return false;
       if (search && !pml.nama.toLowerCase().includes(search.toLowerCase())) return false;
-      if (!petugasMatchWilayah(pml, false)) return false;
+      // Filter utama: apakah PML ini punya PPL dengan SLS di wilayah terpilih?
+      if (!petugasMemilikiSLSDiWilayah(pml, false)) return false;
       return true;
     })
     .map((pml) => {
@@ -307,7 +353,10 @@ const ProgressPetugas = ({
               <span style={{ fontWeight: 600, color: "#1A2B42", fontSize: 12 }}>{pml.nama}</span>
               {renderHadirBadge(pml)}
             </div>
-            <div style={{ fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "#003366" }}>
+            <div style={{
+              fontSize: 9, fontWeight: 600, textTransform: "uppercase",
+              letterSpacing: "0.04em", color: "#003366",
+            }}>
               PML
             </div>
           </div>
@@ -330,7 +379,13 @@ const ProgressPetugas = ({
 
   // ─── Row PPL (expandable → SLS) ──────────────────────────────────────────
   const renderPPLRow = (ppl) => {
-    const slsMilikPPL = slsData.filter((w) => w.ppl_id === ppl.id);
+    // SLS milik PPL ini — jika filter wilayah aktif, hanya tampilkan SLS yang cocok
+    const slsMilikPPL = slsData.filter((w) => {
+      if (w.ppl_id !== ppl.id) return false;
+      if (filterKecamatan && w.kecamatan !== filterKecamatan) return false;
+      if (filterKelurahan && w.kelurahan !== filterKelurahan) return false;
+      return true;
+    });
 
     return (
       <React.Fragment key={`ppl-${ppl.id}`}>
@@ -378,7 +433,10 @@ const ProgressPetugas = ({
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "#B0BAC6" }}>
+                <div style={{
+                  fontSize: 9, fontWeight: 600, textTransform: "uppercase",
+                  letterSpacing: "0.04em", color: "#B0BAC6",
+                }}>
                   PPL
                 </div>
               </div>
@@ -399,42 +457,41 @@ const ProgressPetugas = ({
         </tr>
 
         {/* ── Baris SLS di bawah PPL ── */}
-        {expandedPPL[ppl.id] && slsMilikPPL.map((sls) => (
-          <tr key={`sls-${sls.id}`} style={{ backgroundColor: "#FAFAFF" }}>
-            <td style={{ ...cellStyle, textAlign: "left", paddingLeft: 48 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ color: "#C4B5FD", fontSize: 10 }}>└</span>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <span style={{
-                      fontWeight: 700, color: "#5B21B6", fontSize: 11,
-                      background: "#EDE9FE", borderRadius: 5, padding: "1px 7px",
-                    }}>
-                      {sls.kode_sls}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 9, color: "#B0BAC6", marginTop: 1 }}>
-                    {sls.kelurahan} • {sls.kecamatan}
+        {expandedPPL[ppl.id] &&
+          slsMilikPPL.map((sls) => (
+            <tr key={`sls-${sls.id}`} style={{ backgroundColor: "#FAFAFF" }}>
+              <td style={{ ...cellStyle, textAlign: "left", paddingLeft: 48 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ color: "#C4B5FD", fontSize: 10 }}>└</span>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <span style={{
+                        fontWeight: 700, color: "#5B21B6", fontSize: 11,
+                        background: "#EDE9FE", borderRadius: 5, padding: "1px 7px",
+                      }}>
+                        {sls.kode_sls}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 9, color: "#B0BAC6", marginTop: 1 }}>
+                      {sls.kelurahan} • {sls.kecamatan}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </td>
-            {/* Target per SLS */}
-            <td style={{ ...cellStyle, fontWeight: 700, color: "#7c3aed" }}>
-              {Number(sls.target || 0).toLocaleString("id-ID")}
-            </td>
-            {/* Submit & Approve per SLS — jika backend belum kirim, tampilkan — */}
-            <td style={{ ...cellStyle, color: "#B0BAC6", fontSize: 10 }}>
-              {sls.sudahKeLapangan != null ? sls.sudahKeLapangan.toLocaleString("id-ID") : "—"}
-            </td>
-            <td style={{ ...cellStyle, color: "#B0BAC6", fontSize: 10 }}>
-              {sls.submit != null ? sls.submit.toLocaleString("id-ID") : "—"}
-            </td>
-            <td style={{ ...cellStyle, color: "#B0BAC6", fontSize: 10 }}>
-              {sls.approve != null ? sls.approve.toLocaleString("id-ID") : "—"}
-            </td>
-          </tr>
-        ))}
+              </td>
+              <td style={{ ...cellStyle, fontWeight: 700, color: "#7c3aed" }}>
+                {Number(sls.target || 0).toLocaleString("id-ID")}
+              </td>
+              <td style={{ ...cellStyle, color: "#B0BAC6", fontSize: 10 }}>
+                {sls.sudahKeLapangan != null ? sls.sudahKeLapangan.toLocaleString("id-ID") : "—"}
+              </td>
+              <td style={{ ...cellStyle, color: "#B0BAC6", fontSize: 10 }}>
+                {sls.submit != null ? sls.submit.toLocaleString("id-ID") : "—"}
+              </td>
+              <td style={{ ...cellStyle, color: "#B0BAC6", fontSize: 10 }}>
+                {sls.approve != null ? sls.approve.toLocaleString("id-ID") : "—"}
+              </td>
+            </tr>
+          ))}
       </React.Fragment>
     );
   };
@@ -486,7 +543,10 @@ const ProgressPetugas = ({
               return local.toISOString().split("T")[0];
             })()}
             onChange={(e) => onTanggalChange(e.target.value)}
-            style={{ border: "none", background: "transparent", fontSize: 11, color: "#4A5568", outline: "none", cursor: "pointer", flex: 1 }}
+            style={{
+              border: "none", background: "transparent", fontSize: 11,
+              color: "#4A5568", outline: "none", cursor: "pointer", flex: 1,
+            }}
           />
         </div>
       )}
@@ -494,6 +554,7 @@ const ProgressPetugas = ({
       {/* Filter */}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{ display: "flex", gap: 6 }}>
+          {/* Search nama */}
           <div style={{ position: "relative", flex: 1 }}>
             <svg width="11" height="11" viewBox="0 0 11 11" fill="none"
               style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
@@ -512,37 +573,33 @@ const ProgressPetugas = ({
               }}
             />
           </div>
-          {kecamatanOptions.length > 0 && (
-            <div style={{ flex: 1 }}>
-              <SearchableSelect
-                value={filterKecamatan}
-                onChange={handleKecamatanChange}
-                options={kecamatanOptions}
-                placeholder="Semua Kecamatan"
-              />
-            </div>
-          )}
+
+          {/* Filter Kecamatan — dari SLS */}
+          <SearchableSelect
+            value={filterKecamatan}
+            onChange={handleKecamatanChange}
+            options={kecamatanOptions}
+            placeholder="Semua Kecamatan"
+          />
         </div>
 
         <div style={{ display: "flex", gap: 6 }}>
-          {kelurahanOptions.length > 0 && (
-            <div style={{ flex: 1 }}>
-              <SearchableSelect
-                value={filterKelurahan}
-                onChange={setFilterKelurahan}
-                options={kelurahanOptions}
-                placeholder="Semua Kelurahan"
-              />
-            </div>
-          )}
-          <div style={{ flex: 1 }}>
-            <SearchableSelect
-              value={filterPML}
-              onChange={(val) => { setFilterPML(val); setExpandedPML({}); setExpandedPPL({}); }}
-              options={pmlOptions}
-              placeholder="Semua PML"
-            />
-          </div>
+          {/* Filter Kelurahan — dari SLS, bergantung kecamatan terpilih */}
+          <SearchableSelect
+            value={filterKelurahan}
+            onChange={handleKelurahanChange}
+            options={kelurahanOptions}
+            placeholder="Semua Kelurahan"
+          />
+
+          {/* Filter PML */}
+          <SearchableSelect
+            value={filterPML}
+            onChange={(val) => { setFilterPML(val); setExpandedPML({}); setExpandedPPL({}); }}
+            options={pmlOptions}
+            placeholder="Semua PML"
+          />
+
           {adaFilter && (
             <button
               onClick={resetFilter}
@@ -556,6 +613,24 @@ const ProgressPetugas = ({
             </button>
           )}
         </div>
+
+        {/* Info chip wilayah aktif */}
+        {(filterKecamatan || filterKelurahan) && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "#EEF5FF", border: "1px solid #C7DEFF",
+            borderRadius: 8, padding: "4px 10px",
+          }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#003366" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="10" r="3" />
+              <path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 14-8 14S4 15.25 4 10a8 8 0 0 1 8-8z" />
+            </svg>
+            <span style={{ fontSize: 10, color: "#003366", fontWeight: 500 }}>
+              SLS di:{" "}
+              {[filterKelurahan, filterKecamatan].filter(Boolean).join(", ")}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Tabel */}
@@ -574,22 +649,25 @@ const ProgressPetugas = ({
             {filteredPML.length === 0 ? (
               <tr>
                 <td colSpan="5" style={{ textAlign: "center", padding: 40, color: "#B0BAC6", fontSize: 12 }}>
-                  Tidak ada data petugas
+                  {adaFilter
+                    ? "Tidak ada petugas dengan SLS di wilayah ini"
+                    : "Tidak ada data petugas"}
                 </td>
               </tr>
             ) : (
               filteredPML.map((pml) => {
+                // PPL di bawah PML ini yang juga lolos filter wilayah & search
                 const pplDibawahPML = pplList.filter((p) => {
                   if (p.pml_id !== pml.id) return false;
                   if (search && !p.nama.toLowerCase().includes(search.toLowerCase())) return false;
-                  if (!petugasMatchWilayah(p, true)) return false;
+                  // PPL harus punya SLS di wilayah terpilih
+                  if (!petugasMemilikiSLSDiWilayah(p, true)) return false;
                   return true;
                 });
 
                 return (
                   <React.Fragment key={pml.id}>
                     {renderPMLRow(pml)}
-
                     {expandedPML[pml.id] && (
                       <>
                         {pplDibawahPML.length === 0 ? (
@@ -598,7 +676,9 @@ const ProgressPetugas = ({
                               textAlign: "center", padding: "8px 12px",
                               color: "#B0BAC6", fontSize: 11, background: "#F7F8FA",
                             }}>
-                              Belum ada PPL
+                              {filterKecamatan || filterKelurahan
+                                ? "Tidak ada PPL dengan SLS di wilayah ini"
+                                : "Belum ada PPL"}
                             </td>
                           </tr>
                         ) : (
