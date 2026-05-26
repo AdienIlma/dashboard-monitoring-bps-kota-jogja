@@ -1,7 +1,7 @@
 import React from "react";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
-const COLORS = ["#003366", "#E8702A", "#1D9E75", "#E8ECF0"];
+const COLORS = ["#6C47C4", "#003366", "#E8702A", "#1D9E75", "#9AA5B4"];
 
 const StatCard = ({ label, value, persen, color }) => (
   <div
@@ -37,20 +37,12 @@ const StatCard = ({ label, value, persen, color }) => (
   </div>
 );
 
-const CustomTooltip = ({ active, payload }) => {
+const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
-      <div
-        style={{
-          background: "#1A2B42",
-          color: "#fff",
-          borderRadius: 8,
-          padding: "5px 10px",
-          fontSize: 11,
-        }}
-      >
-        <span style={{ fontWeight: 500 }}>{payload[0].name}</span>:{" "}
-        {payload[0].value}%
+      <div style={{ background: "#1A2B42", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 11 }}>
+        <span style={{ fontWeight: 500 }}>{label}</span>:{" "}
+        {payload[0].value.toLocaleString("id-ID")}
       </div>
     );
   }
@@ -65,12 +57,18 @@ const ProgressPendataan = ({ data }) => {
       </div>
     );
 
+    console.log("target:", data.target);
+console.log("ke lapangan:", data.sudahKeLapangan);
+console.log("submit:", data.submit);
+console.log("approve:", data.approve);
+
   const chartData = [
-    { name: "Ke Lapangan", value: parseFloat(data.sudahKeLapanganChartPersen) },
-    { name: "Submit", value: parseFloat(data.submitChartPersen) },
-    { name: "Approve", value: parseFloat(data.approvePersen2) },
-    { name: "Belum", value: parseFloat(data.belumPersen) },
-  ];
+  { name: "Target", value: data.target },
+  { name: "Ke Lapangan", value: data.sudahKeLapangan },
+  { name: "Submit", value: data.submit },
+  { name: "Approve", value: data.approve },
+  { name: "Belum", value: data.target - data.approve },  
+];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -119,29 +117,26 @@ const ProgressPendataan = ({ data }) => {
 
       <div style={{ position: "relative" }}>
         <ResponsiveContainer width="100%" height={150}>
-          <PieChart>
-            <Pie
-              data={chartData}
-              cx="50%"
-              cy="50%"
-              innerRadius={42}
-              outerRadius={62}
-              paddingAngle={2}
-              dataKey="value"
-              startAngle={90}
-              endAngle={-270}
-            >
-              {chartData.map((entry, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={COLORS[index]}
-                  stroke="none"
-                />
-              ))}
-            </Pie>
-            <Tooltip content={<CustomTooltip />} />
-          </PieChart>
-        </ResponsiveContainer>
+ <BarChart
+  data={chartData}
+  layout="vertical"
+  margin={{ top: 0, right: 40, left: 0, bottom: 0 }}
+>
+  <XAxis
+    type="number"
+    domain={[0, data.target]}
+    tick={{ fontSize: 9 }}
+    tickFormatter={(v) => v.toLocaleString("id-ID")}
+  />
+  <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={72} />
+  <Tooltip content={<CustomTooltip />} />
+  <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14}>
+    {chartData.map((entry, index) => (
+      <Cell key={`cell-${index}`} fill={COLORS[index]} />
+    ))}
+  </Bar>
+</BarChart>
+</ResponsiveContainer>
         <div
           style={{
             position: "absolute",
@@ -152,66 +147,9 @@ const ProgressPendataan = ({ data }) => {
             pointerEvents: "none",
           }}
         >
-          <div
-            style={{
-              fontSize: 9,
-              color: "#9AA5B4",
-              fontWeight: 500,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-            }}
-          >
-            TARGET
-          </div>
-          <div
-            style={{
-              fontSize: 17,
-              fontWeight: 500,
-              color: "#1A2B42",
-              lineHeight: 1.2,
-            }}
-          >
-            {data.target.toLocaleString("id-ID")}
-          </div>
         </div>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "3px 10px",
-        }}
-      >
-        {chartData.map((item, i) => (
-          <div
-            key={i}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              fontSize: 10,
-              color: "#7A8899",
-            }}
-          >
-            <div
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: "50%",
-                background: COLORS[i],
-                flexShrink: 0,
-              }}
-            />
-            <span>{item.name}</span>
-            <span
-              style={{ marginLeft: "auto", fontWeight: 500, color: "#1A2B42" }}
-            >
-              {item.value}%
-            </span>
-          </div>
-        ))}
-      </div>
     </div>
   );
 };

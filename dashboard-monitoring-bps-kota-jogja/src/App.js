@@ -31,7 +31,7 @@ import axios from "axios";
 // ─── Halaman Login ───────────────────────────────────────────
 function LoginPage() {
   const { login } = useAuth();
-  const [username, setUsername] = useState("");
+  const [email, setemail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -43,7 +43,7 @@ function LoginPage() {
     try {
       const res = await axios.post(
         "http://localhost:5000/api/auth/login",
-        { username, password },
+        { email, password },
         { headers: { "Content-Type": "application/json" } },
       );
       login(res.data);
@@ -63,13 +63,13 @@ function LoginPage() {
         {error && <div style={loginStyles.error}>{error}</div>}
         <form onSubmit={handleSubmit}>
           <div style={loginStyles.field}>
-            <label style={loginStyles.label}>Username</label>
+            <label style={loginStyles.label}>email</label>
             <input
               style={loginStyles.input}
               type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Masukkan username"
+              value={email}
+              onChange={(e) => setemail(e.target.value)}
+              placeholder="Masukkan email"
               required
             />
           </div>

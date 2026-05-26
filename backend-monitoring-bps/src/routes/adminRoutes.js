@@ -10,12 +10,17 @@ const {
   deleteUser,
   getPMLList,
   getPPLByPML,
+   deleteUsersBulk,
+  importUsers,
+  upload,
 
   // wilayah
-  getWilayah,
+getWilayah,
   createWilayah,
   updateWilayah,
   deleteWilayah,
+  deleteWilayahBulk,
+  importWilayah,
 
   // dashboard
   getDashboardProgress,
@@ -35,16 +40,22 @@ router.use(authenticate, authorize("admin"));
 router.get("/users", getAllUsers);
 router.post("/users", createUser);
 router.put("/users/:id", updateUser);
-router.delete("/users/:id", deleteUser);
+router.post  ('/users/import',   upload.single('file'), importUsers);
+router.delete('/users/bulk',     deleteUsersBulk);
+ 
+router.put   ('/users/:id',      updateUser);
+router.delete('/users/:id',      deleteUser);
 
 router.get("/users/pml", getPMLList);
 router.get("/users/pml/:id/ppl", getPPLByPML);
 
 // WILAYAH MANAGEMENT
-router.get("/wilayah", getWilayah);
-router.post("/wilayah", createWilayah);
-router.put("/wilayah/:id", updateWilayah);
-router.delete("/wilayah/:id", deleteWilayah);
+router.get   ('/wilayah',          getWilayah);
+router.post  ('/wilayah',          createWilayah);
+router.post  ('/wilayah/import',   upload.single('file'), importWilayah);
+router.delete('/wilayah/bulk',     deleteWilayahBulk);
+router.put   ('/wilayah/:id',      updateWilayah);
+router.delete('/wilayah/:id',      deleteWilayah);
 
 // DASHBOARD ENDPOINTS
 router.get("/dashboard/progress", getDashboardProgress);

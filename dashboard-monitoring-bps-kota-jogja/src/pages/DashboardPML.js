@@ -94,7 +94,7 @@ const DashboardPML = () => {
               <div style={styles.pplAvatar}>{ppl.nama.charAt(0)}</div>
               <div style={styles.pplInfo}>
                 <div style={styles.pplName}>{ppl.nama}</div>
-                <div style={styles.pplUsername}>@{ppl.username}</div>
+                <div style={styles.pplemail}>@{ppl.email}</div>
               </div>
               <div style={styles.pplStats}>
                 <div style={styles.pplStat}>
@@ -189,7 +189,7 @@ const styles = {
   pplAvatar: { width: 34, height: 34, borderRadius: '50%', backgroundColor: '#003366', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 500, fontSize: 14, flexShrink: 0 },
   pplInfo: { flex: 1 },
   pplName: { fontSize: 13, fontWeight: 500, color: '#2D3748' },
-  pplUsername: { fontSize: 11, color: '#9AA5B4', marginTop: 1 },
+  pplemail: { fontSize: 11, color: '#9AA5B4', marginTop: 1 },
   pplStats: { display: 'flex', gap: 12 },
   pplStat: { textAlign: 'center' },
   pplStatNum: { fontSize: 16, fontWeight: 500, lineHeight: 1 },

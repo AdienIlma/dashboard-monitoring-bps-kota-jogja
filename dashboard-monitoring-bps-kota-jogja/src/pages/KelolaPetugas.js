@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import api from '../services/api';
 
 const initialForm = {
   nama: '',
-  username: '',
+  email: '',
   password: '',
   role: 'pml',
   pml_id: '',
@@ -12,34 +13,45 @@ const initialForm = {
 };
 
 const KelolaPetugas = () => {
-  const [users, setUsers] = useState([]);
-  const [pmlList, setPmlList] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState(initialForm);
-  const [pesan, setPesan] = useState({ text: '', type: '' });
-
-  useEffect(() => {
-    if (!pesan.text) return;
-    const timer = setTimeout(() => {
-      setPesan({ text: '', type: '' });
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, [pesan]);
-
-  const [activeTab, setActiveTab] = useState('semua');
+  const [users, setUsers]           = useState([]);
+  const [pmlList, setPmlList]       = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [showForm, setShowForm]     = useState(false);
+  const [editingId, setEditingId]   = useState(null);
+  const [form, setForm]             = useState(initialForm);
+  const [pesan, setPesan]           = useState({ text: '', type: '' });
+  const [activeTab, setActiveTab]   = useState('semua');
   const [wilayahList, setWilayahList] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // PML expand state (hierarki PML → PPL)
+  // PML expand (hierarki PML → PPL)
   const [expandedPmlIds, setExpandedPmlIds] = useState({});
 
-  // SLS expand per PPL (dipakai di semua tab)
-  const [expandedUserId, setExpandedUserId] = useState(null);
-  const [showAddSls, setShowAddSls] = useState(null);
-  const [selectedSlsId, setSelectedSlsId] = useState('');
-  const [slsLoading, setSlsLoading] = useState(false);
+  // SLS expand per PPL
+  const [expandedUserId, setExpandedUserId]   = useState(null);
+  const [showAddSls, setShowAddSls]           = useState(null);
+  const [selectedSlsId, setSelectedSlsId]     = useState('');
+  const [slsLoading, setSlsLoading]           = useState(false);
   const [formSelectedWilayahId, setFormSelectedWilayahId] = useState('');
+
+  // ── FITUR BARU: multi-select & import ───────────────────────────────
+  const [selectedIds, setSelectedIds]       = useState(new Set());
+  const [importLoading, setImportLoading]   = useState(false);
+  const [importResult, setImportResult]     = useState(null);
+  const fileInputRef                        = useRef(null);
+  // ────────────────────────────────────────────────────────────────────
+
+  const filteredUsers = users.filter((u) =>
+  u.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
+  u.email.toLowerCase().includes(searchQuery.toLowerCase())
+);
+
+  // Auto-hide pesan
+  useEffect(() => {
+    if (!pesan.text) return;
+    const t = setTimeout(() => setPesan({ text: '', type: '' }), 4000);
+    return () => clearTimeout(t);
+  }, [pesan]);
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -71,94 +83,165 @@ const KelolaPetugas = () => {
 
   const slsLabel = (w) => `${w.kode_sls}  •  ${w.kelurahan}  •  ${w.kecamatan}`;
 
-  const togglePml = (pmlId) =>
-    setExpandedPmlIds((prev) => ({ ...prev, [pmlId]: !prev[pmlId] }));
-
+  const togglePml       = (pmlId) => setExpandedPmlIds((p) => ({ ...p, [pmlId]: !p[pmlId] }));
   const toggleExpandSls = (userId) => {
     setExpandedUserId(expandedUserId === userId ? null : userId);
     setShowAddSls(null);
     setSelectedSlsId('');
   };
 
-  // ── Format WA ───────────────────────────────────────────────────────
-  const formatWaDisplay = (nomor) => {
-    if (!nomor) return '—';
-    return `+62 ${nomor.replace(/^0/, '')}`;
-  };
-  const waHref = (nomor) => {
-    if (!nomor) return '#';
-    return `https://wa.me/62${nomor.replace(/^0/, '')}`;
-  };
+  const formatWaDisplay = (n) => (!n ? '—' : `+62 ${n.replace(/^0/, '')}`);
+  const waHref          = (n) => (!n ? '#' : `https://wa.me/62${n.replace(/^0/, '')}`);
 
-  // ── Helper Target ───────────────────────────────────────────────────
-  const getSlsTarget = (wilayahId) => {
-    const w = wilayahList.find((x) => Number(x.id) === Number(wilayahId));
-    return Number(w?.target || 0);
-  };
+  const getSlsTarget  = (wilayahId) =>
+    Number(wilayahList.find((x) => Number(x.id) === Number(wilayahId))?.target || 0);
 
   const getUserTarget = (user) => {
     if (!user) return 0;
-
-    // PPL: jumlah target dari SLS yang dimiliki
-    if (user.role === 'ppl') {
-      return (user.wilayah_ids || []).reduce(
-        (sum, id) => sum + getSlsTarget(id),
-        0
-      );
-    }
-
-    // PML: jumlah target semua PPL di bawahnya
-    if (user.role === 'pml') {
-      return users
-        .filter((u) => u.role === 'ppl' && u.pml_id === user.id)
-        .reduce((sum, ppl) => sum + getUserTarget(ppl), 0);
-    }
-
+    if (user.role === 'ppl')
+      return (user.wilayah_ids || []).reduce((s, id) => s + getSlsTarget(id), 0);
+    if (user.role === 'pml')
+      return users.filter((u) => u.role === 'ppl' && u.pml_id === user.id)
+                  .reduce((s, ppl) => s + getUserTarget(ppl), 0);
     return 0;
   };
 
-  // ── SLS API handlers ────────────────────────────────────────────────
+  // ── Multi-select helpers ─────────────────────────────────────────────
+  const getVisibleUserIds = () => {
+    if (activeTab === 'semua') return users.map((u) => u.id);
+    return users.filter((u) => u.role === activeTab).map((u) => u.id);
+  };
+
+  const toggleSelect = (id) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const toggleSelectAll = () => {
+    const visible = getVisibleUserIds();
+    const allSelected = visible.length > 0 && visible.every((id) => selectedIds.has(id));
+    setSelectedIds(allSelected ? new Set() : new Set(visible));
+  };
+
+  // ── Hapus bulk ───────────────────────────────────────────────────────
+  const handleDeleteBulk = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Hapus ${selectedIds.size} petugas sekaligus? Tindakan ini tidak bisa dibatalkan.`)) return;
+    try {
+      await api.delete('/admin/users/bulk', { data: { ids: [...selectedIds] } });
+      setPesan({ text: `✅ ${selectedIds.size} petugas berhasil dihapus!`, type: 'success' });
+      setSelectedIds(new Set());
+      fetchAll();
+    } catch (err) {
+      setPesan({ text: '❌ ' + (err.response?.data?.message || 'Gagal hapus bulk'), type: 'error' });
+    }
+  };
+
+  // ── Import Excel ─────────────────────────────────────────────────────
+  const handleImportExcel = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImportLoading(true);
+    setImportResult(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.post('/admin/users/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setImportResult(res.data);
+      setPesan({ text: `✅ ${res.data.message}`, type: 'success' });
+      fetchAll();
+    } catch (err) {
+      setPesan({
+        text: '❌ ' + (err.response?.data?.message || 'Gagal import Excel'),
+        type: 'error'
+      });
+    } finally {
+      setImportLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  // ── Download template Excel (.xlsx) ─────────────────────────────────
+  const handleDownloadTemplate = () => {
+    // Data contoh — 1 baris PML, 2 baris PPL
+    const data = [
+      {
+        nama:            'Suryani',
+        email:           'suryani@example.com',
+        password:        'password123',
+        role:            'pml',
+        nomor_whatsapp:  '08987654321',
+        pml_email:       '',
+        kode_sls:        ''
+      },
+      {
+        nama:            'Saiful',
+        email:           'saiful@example.com',
+        password:        'password123',
+        role:            'ppl',
+        nomor_whatsapp:  '08123456789',
+        pml_email:       'suryani@example.com',
+        kode_sls:        '001A,001B'
+      }
+    ];
+
+    // Buat worksheet dari array of objects
+    const ws = XLSX.utils.json_to_sheet(data);
+
+    // Atur lebar kolom agar mudah dibaca
+    ws['!cols'] = [
+      { wch: 20 }, // nama
+      { wch: 25 }, // email
+      { wch: 15 }, // password
+      { wch: 8  }, // role
+      { wch: 18 }, // nomor_whatsapp
+      { wch: 25 }, // pml_email
+      { wch: 20 }, // kode_sls
+    ];
+
+    // Buat workbook dan masukkan worksheet
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Template Petugas');
+
+    // Download sebagai .xlsx
+    XLSX.writeFile(wb, 'template_petugas.xlsx');
+  };
+
+  // ── SLS API handlers ─────────────────────────────────────────────────
   const handleAddSls = async (userId) => {
     if (!selectedSlsId) return;
     setSlsLoading(true);
     try {
-      const user = users.find((u) => u.id === userId);
-      if (!user) return;
+      const user       = users.find((u) => u.id === userId);
       const currentIds = Array.isArray(user.wilayah_ids) ? user.wilayah_ids.map(Number) : [];
-      const newId = Number(selectedSlsId);
+      const newId      = Number(selectedSlsId);
       if (currentIds.includes(newId)) return;
       await api.put(`/admin/users/${userId}`, {
-        nama: user.nama,
-        username: user.username,
-        role: user.role,
-        pml_id: user.pml_id || null,
-        nomor_whatsapp: user.nomor_whatsapp || '',
+        nama: user.nama, email: user.email, role: user.role,
+        pml_id: user.pml_id || null, nomor_whatsapp: user.nomor_whatsapp || '',
         wilayah_ids: [...currentIds, newId]
       });
-      setSelectedSlsId('');
-      setShowAddSls(null);
+      setSelectedSlsId(''); setShowAddSls(null);
       await fetchAll();
       setPesan({ text: '✅ SLS berhasil ditambahkan!', type: 'success' });
     } catch (err) {
       setPesan({ text: '❌ ' + (err.response?.data?.message || 'Gagal tambah SLS'), type: 'error' });
-    } finally {
-      setSlsLoading(false);
-    }
+    } finally { setSlsLoading(false); }
   };
 
   const handleRemoveSls = async (userId, wilayahId) => {
     if (!window.confirm('Hapus SLS ini dari petugas?')) return;
     try {
-      const user = users.find((u) => u.id === userId);
-      if (!user) return;
+      const user   = users.find((u) => u.id === userId);
       const newIds = (Array.isArray(user.wilayah_ids) ? user.wilayah_ids.map(Number) : [])
-        .filter((id) => id !== Number(wilayahId));
+                       .filter((id) => id !== Number(wilayahId));
       await api.put(`/admin/users/${userId}`, {
-        nama: user.nama,
-        username: user.username,
-        role: user.role,
-        pml_id: user.pml_id || null,
-        nomor_whatsapp: user.nomor_whatsapp || '',
+        nama: user.nama, email: user.email, role: user.role,
+        pml_id: user.pml_id || null, nomor_whatsapp: user.nomor_whatsapp || '',
         wilayah_ids: newIds
       });
       await fetchAll();
@@ -168,25 +251,25 @@ const KelolaPetugas = () => {
     }
   };
 
-  // ── SLS form (lokal) ────────────────────────────────────────────────
+  // ── SLS form (lokal) ─────────────────────────────────────────────────
   const addWilayahForm = () => {
     if (!formSelectedWilayahId || form.wilayah_ids.includes(formSelectedWilayahId)) return;
-    setForm((prev) => ({ ...prev, wilayah_ids: [...prev.wilayah_ids, formSelectedWilayahId] }));
+    setForm((p) => ({ ...p, wilayah_ids: [...p.wilayah_ids, formSelectedWilayahId] }));
     setFormSelectedWilayahId('');
   };
   const removeWilayahForm = (id) =>
-    setForm((prev) => ({ ...prev, wilayah_ids: prev.wilayah_ids.filter((x) => x !== id) }));
+    setForm((p) => ({ ...p, wilayah_ids: p.wilayah_ids.filter((x) => x !== id) }));
 
-  // ── CRUD ────────────────────────────────────────────────────────────
+  // ── CRUD form ────────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     setPesan({ text: '', type: '' });
     try {
       const payload = {
         ...form,
-        pml_id: form.role === 'ppl' ? form.pml_id || null : null,
+        pml_id:      form.role === 'ppl' ? form.pml_id || null : null,
         wilayah_ids: form.role === 'ppl' ? form.wilayah_ids : [],
-        password: form.password || undefined
+        password:    form.password || undefined
       };
       if (editingId) {
         if (!payload.password) delete payload.password;
@@ -196,8 +279,7 @@ const KelolaPetugas = () => {
         await api.post('/admin/users', payload);
         setPesan({ text: '✅ Petugas berhasil ditambahkan!', type: 'success' });
       }
-      resetForm();
-      fetchAll();
+      resetForm(); fetchAll();
     } catch (err) {
       setPesan({ text: '❌ ' + (err.response?.data?.message || 'Gagal simpan petugas'), type: 'error' });
     }
@@ -206,12 +288,8 @@ const KelolaPetugas = () => {
   const handleEdit = (user) => {
     setEditingId(user.id);
     setForm({
-      nama: user.nama,
-      username: user.username,
-      password: '',
-      role: user.role,
-      pml_id: user.pml_id || '',
-      nomor_whatsapp: user.nomor_whatsapp || '',
+      nama: user.nama, email: user.email, password: '', role: user.role,
+      pml_id: user.pml_id || '', nomor_whatsapp: user.nomor_whatsapp || '',
       wilayah_ids: user.wilayah_ids || []
     });
     setShowForm(true);
@@ -229,41 +307,33 @@ const KelolaPetugas = () => {
     }
   };
 
-  // ── Stats & helpers ─────────────────────────────────────────────────
+  // ── Stats ────────────────────────────────────────────────────────────
   const counts = {
     admin: users.filter((u) => u.role === 'admin').length,
     pml:   users.filter((u) => u.role === 'pml').length,
     ppl:   users.filter((u) => u.role === 'ppl').length
   };
 
-  const roleColor = (role) => {
-    switch (role) {
-      case 'admin': return { bg: '#fee2e2', color: '#dc2626' };
-      case 'pml':   return { bg: '#eef2ff', color: '#6366f1' };
-      case 'ppl':   return { bg: '#f0fdf4', color: '#16a34a' };
-      default:      return { bg: '#f1f5f9', color: '#64748b' };
-    }
-  };
+  const roleColor = (role) => ({
+    admin: { bg: '#fee2e2', color: '#dc2626' },
+    pml:   { bg: '#eef2ff', color: '#6366f1' },
+    ppl:   { bg: '#f0fdf4', color: '#16a34a' }
+  }[role] || { bg: '#f1f5f9', color: '#64748b' });
 
-  // ── Render SLS panel (dipakai oleh renderPplRow) ────────────────────
+  // ── Render: SLS panel ────────────────────────────────────────────────
   const renderSlsPanel = (ppl, colSpan) => {
     const wilayahUser  = Array.isArray(ppl.wilayah_ids) ? ppl.wilayah_ids : [];
     const isAddSlsOpen = showAddSls === ppl.id;
-    const usedWilayahIds = users
+    const usedIds      = users
       .filter((u) => u.role === 'ppl' && u.id !== ppl.id)
-      .flatMap((u) =>
-        Array.isArray(u.wilayah_ids) ? u.wilayah_ids.map(Number) : []
-      );
-
+      .flatMap((u) => (Array.isArray(u.wilayah_ids) ? u.wilayah_ids.map(Number) : []));
     const availableSls = wilayahList.filter(
-      (w) =>
-        !wilayahUser.includes(w.id) &&
-        !usedWilayahIds.includes(Number(w.id))
+      (w) => !wilayahUser.includes(w.id) && !usedIds.includes(Number(w.id))
     );
 
     return (
-      <tr>
-        <td colSpan={colSpan} style={{ padding: 0 }}>
+      <tr key={`sls-${ppl.id}`}>
+        <td colSpan={colSpan + 1 /* +1 untuk kolom checkbox */} style={{ padding: 0 }}>
           <div style={{ ...styles.expandPanel, background: '#f0f4ff' }}>
             <div style={styles.expandHeader}>
               <span style={styles.expandTitle}>📋 Kode SLS — {ppl.nama}</span>
@@ -286,13 +356,9 @@ const KelolaPetugas = () => {
                       <span style={{ ...styles.colKode, fontWeight: 700, color: '#1e3a5f' }}>{w.kode_sls}</span>
                       <span style={styles.colKel}>{w.kelurahan}</span>
                       <span style={styles.colKec}>{w.kecamatan}</span>
-                      <span style={{ ...styles.colTarget, fontWeight: 700, color: '#1e3a5f' }}>
-                        {Number(w.target || 0)}
-                      </span>
+                      <span style={{ ...styles.colTarget, fontWeight: 700, color: '#1e3a5f' }}>{Number(w.target || 0)}</span>
                       <span style={styles.colAksi}>
-                        <button type="button" onClick={() => handleRemoveSls(ppl.id, id)} style={styles.deleteBtn}>
-                          Hapus
-                        </button>
+                        <button type="button" onClick={() => handleRemoveSls(ppl.id, id)} style={styles.deleteBtn}>Hapus</button>
                       </span>
                     </div>
                   );
@@ -314,27 +380,18 @@ const KelolaPetugas = () => {
                   ))}
                 </select>
                 <button
-                  type="button"
-                  onClick={() => handleAddSls(ppl.id)}
+                  type="button" onClick={() => handleAddSls(ppl.id)}
                   disabled={slsLoading || !selectedSlsId}
                   style={{ ...styles.addBtn, opacity: (!selectedSlsId || slsLoading) ? 0.5 : 1 }}
                 >
                   {slsLoading ? 'Menyimpan...' : 'Simpan'}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => { setShowAddSls(null); setSelectedSlsId(''); }}
-                  style={styles.cancelBtn}
-                >
+                <button type="button" onClick={() => { setShowAddSls(null); setSelectedSlsId(''); }} style={styles.cancelBtn}>
                   Batal
                 </button>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => { setShowAddSls(ppl.id); setSelectedSlsId(''); }}
-                style={styles.addSlsBtn}
-              >
+              <button type="button" onClick={() => { setShowAddSls(ppl.id); setSelectedSlsId(''); }} style={styles.addSlsBtn}>
                 + Tambah SLS
               </button>
             )}
@@ -344,40 +401,41 @@ const KelolaPetugas = () => {
     );
   };
 
-  // ── Render baris PPL ────────────────────────────────────────────────
+  // ── Render: baris PPL ────────────────────────────────────────────────
   const renderPplRow = (ppl, showPmlCol = false) => {
     const roleStyle  = roleColor(ppl.role);
     const isExpanded = expandedUserId === ppl.id;
     const colSpan    = showPmlCol ? 8 : 7;
     const pmlNama    = showPmlCol && ppl.pml_id
-      ? users.find((p) => p.id === ppl.pml_id)?.nama || '—'
-      : null;
+      ? users.find((p) => p.id === ppl.pml_id)?.nama || '—' : null;
 
     const firstTdStyle = showPmlCol
-      ? { ...styles.td }
+      ? styles.td
       : { ...styles.td, paddingLeft: 36, borderLeft: '3px solid #6366f1' };
 
     return (
       <React.Fragment key={ppl.id}>
         <tr style={{ ...styles.tr, background: showPmlCol ? 'inherit' : '#fafbff' }}>
+          {/* Checkbox */}
+          <td style={{ ...styles.td, width: 40, textAlign: 'center' }}>
+            <input
+              type="checkbox"
+              checked={selectedIds.has(ppl.id)}
+              onChange={() => toggleSelect(ppl.id)}
+              style={{ cursor: 'pointer', accentColor: '#1e3a5f', width: 15, height: 15 }}
+            />
+          </td>
           <td style={firstTdStyle}>
-            <button
-              type="button"
-              onClick={() => toggleExpandSls(ppl.id)}
-              style={{
-                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                fontWeight: showPmlCol ? 700 : 600,
-                color: showPmlCol ? '#1e3a5f' : '#334155',
-                textAlign: 'left', fontSize: 13,
-                display: 'flex', alignItems: 'center', gap: 6
-              }}
-            >
+            <button type="button" onClick={() => toggleExpandSls(ppl.id)}
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                fontWeight: showPmlCol ? 700 : 600, color: showPmlCol ? '#1e3a5f' : '#334155',
+                textAlign: 'left', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
               {!showPmlCol && <span style={{ color: '#94a3b8', fontSize: 10 }}>↳</span>}
               {ppl.nama}
               <span style={{ color: '#94a3b8', fontSize: 10 }}>{isExpanded ? '▲' : '▼'}</span>
             </button>
           </td>
-          <td style={styles.td}>{ppl.username}</td>
+          <td style={styles.td}>{ppl.email}</td>
           <td style={styles.td}>
             <span style={{ ...styles.badge, backgroundColor: roleStyle.bg, color: roleStyle.color }}>
               {ppl.role.toUpperCase()}
@@ -386,29 +444,17 @@ const KelolaPetugas = () => {
           {showPmlCol && (
             <td style={styles.td}>
               {pmlNama
-                ? <span style={{ fontSize: 12, background: '#eef2ff', color: '#4338ca', borderRadius: 6, padding: '2px 8px', fontWeight: 600 }}>
-                    {pmlNama}
-                  </span>
-                : <span style={styles.waEmpty}>—</span>
-              }
+                ? <span style={{ fontSize: 12, background: '#eef2ff', color: '#4338ca', borderRadius: 6, padding: '2px 8px', fontWeight: 600 }}>{pmlNama}</span>
+                : <span style={styles.waEmpty}>—</span>}
             </td>
           )}
           <td style={styles.td}>
             {ppl.nomor_whatsapp
-              ? <a href={waHref(ppl.nomor_whatsapp)} target="_blank" rel="noreferrer" style={styles.waLink}>
-                  {formatWaDisplay(ppl.nomor_whatsapp)}
-                </a>
-              : <span style={styles.waEmpty}>—</span>
-            }
+              ? <a href={waHref(ppl.nomor_whatsapp)} target="_blank" rel="noreferrer" style={styles.waLink}>{formatWaDisplay(ppl.nomor_whatsapp)}</a>
+              : <span style={styles.waEmpty}>—</span>}
           </td>
-          <td style={styles.td}>
-            <span style={{ fontWeight: 700, color: '#1e3a5f' }}>
-              {getUserTarget(ppl)}
-            </span>
-          </td>
-          <td style={styles.td}>
-            {new Date(ppl.created_at).toLocaleDateString('id-ID')}
-          </td>
+          <td style={styles.td}><span style={{ fontWeight: 700, color: '#1e3a5f' }}>{getUserTarget(ppl)}</span></td>
+          <td style={styles.td}>{new Date(ppl.created_at).toLocaleDateString('id-ID')}</td>
           <td style={styles.td}>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => handleEdit(ppl)} style={styles.editBtn}>Edit</button>
@@ -421,7 +467,7 @@ const KelolaPetugas = () => {
     );
   };
 
-  // ── Render baris PML + anak PPL-nya ────────────────────────────────
+  // ── Render: baris PML ────────────────────────────────────────────────
   const renderPmlRow = (pml) => {
     const roleStyle   = roleColor(pml.role);
     const isOpen      = !!expandedPmlIds[pml.id];
@@ -430,38 +476,35 @@ const KelolaPetugas = () => {
     return (
       <React.Fragment key={pml.id}>
         <tr style={{ ...styles.tr, background: '#f8fafc' }}>
+          {/* Checkbox */}
+          <td style={{ ...styles.td, width: 40, textAlign: 'center' }}>
+            <input
+              type="checkbox"
+              checked={selectedIds.has(pml.id)}
+              onChange={() => toggleSelect(pml.id)}
+              style={{ cursor: 'pointer', accentColor: '#1e3a5f', width: 15, height: 15 }}
+            />
+          </td>
           <td style={styles.td}>
-            <button
-              type="button"
-              onClick={() => togglePml(pml.id)}
-              style={{
-                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+            <button type="button" onClick={() => togglePml(pml.id)}
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer',
                 fontWeight: 700, color: '#1e3a5f', textAlign: 'left', fontSize: 13,
-                display: 'flex', alignItems: 'center', gap: 6
-              }}
-            >
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                width: 18, height: 18,
-                background: isOpen ? '#1e3a5f' : '#e2e8f0',
-                borderRadius: 4, fontSize: 9,
-                color: isOpen ? 'white' : '#64748b',
-                transition: 'all .15s', flexShrink: 0
-              }}>
+                display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: 18, height: 18, background: isOpen ? '#1e3a5f' : '#e2e8f0',
+                borderRadius: 4, fontSize: 9, color: isOpen ? 'white' : '#64748b',
+                transition: 'all .15s', flexShrink: 0 }}>
                 {isOpen ? '▲' : '▼'}
               </span>
               {pml.nama}
               {pplChildren.length > 0 && (
-                <span style={{
-                  background: '#eef2ff', color: '#4338ca',
-                  borderRadius: 10, padding: '1px 8px', fontSize: 10, fontWeight: 600
-                }}>
+                <span style={{ background: '#eef2ff', color: '#4338ca', borderRadius: 10, padding: '1px 8px', fontSize: 10, fontWeight: 600 }}>
                   {pplChildren.length} PPL
                 </span>
               )}
             </button>
           </td>
-          <td style={styles.td}>{pml.username}</td>
+          <td style={styles.td}>{pml.email}</td>
           <td style={styles.td}>
             <span style={{ ...styles.badge, backgroundColor: roleStyle.bg, color: roleStyle.color }}>
               {pml.role.toUpperCase()}
@@ -469,17 +512,10 @@ const KelolaPetugas = () => {
           </td>
           <td style={styles.td}>
             {pml.nomor_whatsapp
-              ? <a href={waHref(pml.nomor_whatsapp)} target="_blank" rel="noreferrer" style={styles.waLink}>
-                  {formatWaDisplay(pml.nomor_whatsapp)}
-                </a>
-              : <span style={styles.waEmpty}>—</span>
-            }
+              ? <a href={waHref(pml.nomor_whatsapp)} target="_blank" rel="noreferrer" style={styles.waLink}>{formatWaDisplay(pml.nomor_whatsapp)}</a>
+              : <span style={styles.waEmpty}>—</span>}
           </td>
-          <td style={styles.td}>
-            <span style={{ fontWeight: 700, color: '#1e3a5f' }}>
-              {getUserTarget(pml)}
-            </span>
-          </td>
+          <td style={styles.td}><span style={{ fontWeight: 700, color: '#1e3a5f' }}>{getUserTarget(pml)}</span></td>
           <td style={styles.td}>{new Date(pml.created_at).toLocaleDateString('id-ID')}</td>
           <td style={styles.td}>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -493,15 +529,21 @@ const KelolaPetugas = () => {
     );
   };
 
-  // ── Render baris admin / user biasa ────────────────────────────────
+  // ── Render: baris admin/plain ────────────────────────────────────────
   const renderPlainRow = (u) => {
     const roleStyle = roleColor(u.role);
     return (
       <tr key={u.id} style={styles.tr}>
-        <td style={styles.td}>
-          <span style={{ fontWeight: 700, color: '#1e3a5f', fontSize: 13 }}>{u.nama}</span>
+        <td style={{ ...styles.td, width: 40, textAlign: 'center' }}>
+          <input
+            type="checkbox"
+            checked={selectedIds.has(u.id)}
+            onChange={() => toggleSelect(u.id)}
+            style={{ cursor: 'pointer', accentColor: '#1e3a5f', width: 15, height: 15 }}
+          />
         </td>
-        <td style={styles.td}>{u.username}</td>
+        <td style={styles.td}><span style={{ fontWeight: 700, color: '#1e3a5f', fontSize: 13 }}>{u.nama}</span></td>
+        <td style={styles.td}>{u.email}</td>
         <td style={styles.td}>
           <span style={{ ...styles.badge, backgroundColor: roleStyle.bg, color: roleStyle.color }}>
             {u.role.toUpperCase()}
@@ -509,15 +551,10 @@ const KelolaPetugas = () => {
         </td>
         <td style={styles.td}>
           {u.nomor_whatsapp
-            ? <a href={waHref(u.nomor_whatsapp)} target="_blank" rel="noreferrer" style={styles.waLink}>
-                {formatWaDisplay(u.nomor_whatsapp)}
-              </a>
-            : <span style={styles.waEmpty}>—</span>
-          }
+            ? <a href={waHref(u.nomor_whatsapp)} target="_blank" rel="noreferrer" style={styles.waLink}>{formatWaDisplay(u.nomor_whatsapp)}</a>
+            : <span style={styles.waEmpty}>—</span>}
         </td>
-        <td style={styles.td}>
-          <span style={{ color: '#94a3b8', fontSize: 12 }}>—</span>
-        </td>
+        <td style={styles.td}><span style={{ color: '#94a3b8', fontSize: 12 }}>—</span></td>
         <td style={styles.td}>{new Date(u.created_at).toLocaleDateString('id-ID')}</td>
         <td style={styles.td}>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -529,43 +566,42 @@ const KelolaPetugas = () => {
     );
   };
 
-  // ── Isi tbody ───────────────────────────────────────────────────────
+  // ── Render: tbody ────────────────────────────────────────────────────
   const renderTableBody = () => {
-    if (loading) return <tr><td colSpan="8" style={styles.empty}>Memuat data...</td></tr>;
+  if (loading) return <tr><td colSpan="9" style={styles.empty}>Memuat data...</td></tr>;
 
-    if (activeTab === 'semua') {
-      if (users.length === 0) return <tr><td colSpan="7" style={styles.empty}>Belum ada data</td></tr>;
-      return (
-        <>
-          {users.filter((u) => u.role === 'admin').map(renderPlainRow)}
-          {users.filter((u) => u.role === 'pml').map(renderPmlRow)}
-          {users.filter((u) => u.role === 'ppl' && !u.pml_id).map(renderPlainRow)}
-        </>
-      );
-    }
+  if (activeTab === 'semua') {
+    if (filteredUsers.length === 0) return <tr><td colSpan="9" style={styles.empty}>Tidak ada data</td></tr>;
+    return (
+      <>
+        {filteredUsers.filter((u) => u.role === 'admin').map(renderPlainRow)}
+        {filteredUsers.filter((u) => u.role === 'pml').map(renderPmlRow)}
+        {filteredUsers.filter((u) => u.role === 'ppl' && !u.pml_id).map(renderPlainRow)}
+      </>
+    );
+  }
+  if (activeTab === 'pml') {
+    const pmls = filteredUsers.filter((u) => u.role === 'pml');
+    if (!pmls.length) return <tr><td colSpan="9" style={styles.empty}>Tidak ada data</td></tr>;
+    return pmls.map(renderPmlRow);
+  }
+  if (activeTab === 'admin') {
+    const admins = filteredUsers.filter((u) => u.role === 'admin');
+    if (!admins.length) return <tr><td colSpan="9" style={styles.empty}>Tidak ada data</td></tr>;
+    return admins.map(renderPlainRow);
+  }
+  if (activeTab === 'ppl') {
+    const ppls = filteredUsers.filter((u) => u.role === 'ppl');
+    if (!ppls.length) return <tr><td colSpan="9" style={styles.empty}>Tidak ada data</td></tr>;
+    return ppls.map((ppl) => renderPplRow(ppl, true));
+  }
+  return null;
+};
 
-    if (activeTab === 'pml') {
-      const pmls = users.filter((u) => u.role === 'pml');
-      if (pmls.length === 0) return <tr><td colSpan="7" style={styles.empty}>Belum ada data</td></tr>;
-      return pmls.map(renderPmlRow);
-    }
-
-    if (activeTab === 'admin') {
-      const admins = users.filter((u) => u.role === 'admin');
-      if (admins.length === 0) return <tr><td colSpan="7" style={styles.empty}>Belum ada data</td></tr>;
-      return admins.map(renderPlainRow);
-    }
-
-    if (activeTab === 'ppl') {
-      const ppls = users.filter((u) => u.role === 'ppl');
-      if (ppls.length === 0) return <tr><td colSpan="8" style={styles.empty}>Belum ada data</td></tr>;
-      return ppls.map((ppl) => renderPplRow(ppl, true));
-    }
-
-    return null;
-  };
-
-  const isPplTab = activeTab === 'ppl';
+  const isPplTab       = activeTab === 'ppl';
+  const visibleIds     = getVisibleUserIds();
+  const allChecked     = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const someChecked    = visibleIds.some((id) => selectedIds.has(id));
 
   return (
     <div style={styles.container}>
@@ -573,7 +609,7 @@ const KelolaPetugas = () => {
       {/* Stats */}
       <div style={styles.statsRow}>
         {[
-          { label: 'Total User', val: users.length,  color: '#1e3a5f' },
+          { label: 'Total User', val: users.length, color: '#1e3a5f' },
           { label: 'Admin',      val: counts.admin,  color: '#dc2626' },
           { label: 'PML',        val: counts.pml,    color: '#6366f1' },
           { label: 'PPL',        val: counts.ppl,    color: '#16a34a' }
@@ -585,7 +621,7 @@ const KelolaPetugas = () => {
         ))}
       </div>
 
-      {/* Pesan */}
+      {/* Pesan notifikasi */}
       {pesan.text && (
         <div style={{
           ...styles.pesan,
@@ -596,25 +632,100 @@ const KelolaPetugas = () => {
         </div>
       )}
 
-      {/* Tabs & Tambah */}
-      <div style={styles.rowBetween}>
+      {/* ── Tabs & tombol aksi ── */}
+      <div style={{ ...styles.rowBetween, flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+        {/* Tabs */}
         <div style={styles.tabs}>
           {[['semua','Semua'],['admin','Admin'],['pml','PML'],['ppl','PPL']].map(([val, label]) => (
-            <button key={val} onClick={() => setActiveTab(val)}
+            <button key={val}
+              onClick={() => { setActiveTab(val); setSelectedIds(new Set()); }}
               style={{ ...styles.tab, ...(activeTab === val ? styles.tabActive : {}) }}>
               {label}
             </button>
           ))}
         </div>
-        <button onClick={() => showForm ? resetForm() : setShowForm(true)} style={styles.addBtn}>
-          {showForm ? '✕ Batal' : '+ Tambah Petugas'}
-        </button>
+
+        {/* ── Search ── */}
+  <input
+    type="text"
+    placeholder="🔍 Cari nama / email..."
+    value={searchQuery}
+    onChange={(e) => setSearchQuery(e.target.value)}
+    style={{
+      padding: '8px 12px',
+      border: '1.5px solid #e2e8f0',
+      borderRadius: 8,
+      fontSize: 13,
+      outline: 'none',
+      width: 220,
+      color: '#334155'
+    }}
+  />
+
+        {/* Tombol kanan */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+
+          {/* Hapus terpilih — muncul jika ada yang dicentang */}
+          {selectedIds.size > 0 && (
+            <button onClick={handleDeleteBulk} style={styles.deleteBulkBtn}>
+              🗑 Hapus {selectedIds.size} Terpilih
+            </button>
+          )}
+
+          {/* Import Excel */}
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={handleImportExcel}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importLoading}
+            style={{ ...styles.importBtn, opacity: importLoading ? 0.6 : 1, cursor: importLoading ? 'not-allowed' : 'pointer' }}
+          >
+            {importLoading ? '⏳ Mengimpor...' : '📥 Import Excel'}
+          </button>
+
+          {/* Download template CSV */}
+          <button onClick={handleDownloadTemplate} style={styles.templateBtn}>
+            📄 Template
+          </button>
+
+          {/* Tambah manual */}
+          <button onClick={() => showForm ? resetForm() : setShowForm(true)} style={styles.addBtn}>
+            {showForm ? '✕ Batal' : '+ Tambah Petugas'}
+          </button>
+        </div>
       </div>
 
-      {/* Form Tambah / Edit */}
+      {/* ── Hasil import — tampil jika ada baris yang gagal ── */}
+      {importResult && importResult.gagal?.length > 0 && (
+        <div style={styles.importResultBox}>
+          <div style={{ fontWeight: 700, marginBottom: 8, color: '#92400e', fontSize: 13 }}>
+            ⚠️ {importResult.berhasil} berhasil, {importResult.gagal.length} baris gagal:
+          </div>
+          <div style={{ maxHeight: 160, overflowY: 'auto' }}>
+            {importResult.gagal.map((g, i) => (
+              <div key={i} style={{ fontSize: 12, color: '#78350f', marginBottom: 3 }}>
+                • <b>{g.email}</b>: {g.alasan}
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => setImportResult(null)}
+            style={{ marginTop: 8, fontSize: 11, color: '#92400e', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+          >
+            Tutup
+          </button>
+        </div>
+      )}
+
+      {/* ── Form Tambah / Edit ── */}
       {showForm && (
         <div style={styles.formCard}>
-          <h4 style={styles.formTitle}>{editingId ? 'Edit Petugas' : 'Tambah Petugas Baru'}</h4>
+          <h4 style={styles.formTitle}>{editingId ? '✏️ Edit Petugas' : '➕ Tambah Petugas Baru'}</h4>
           <form onSubmit={handleSubmit}>
             <div style={styles.formGrid}>
               <div style={styles.field}>
@@ -623,9 +734,9 @@ const KelolaPetugas = () => {
                   onChange={(e) => setForm({ ...form, nama: e.target.value })} required />
               </div>
               <div style={styles.field}>
-                <label style={styles.label}>Username</label>
-                <input style={styles.input} type="text" value={form.username}
-                  onChange={(e) => setForm({ ...form, username: e.target.value })} required />
+                <label style={styles.label}>Email</label>
+                <input style={styles.input} type="email" value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })} required />
               </div>
               <div style={styles.field}>
                 <label style={styles.label}>
@@ -645,15 +756,13 @@ const KelolaPetugas = () => {
                   <option value="ppl">PPL</option>
                 </select>
               </div>
-              {/* Nomor WhatsApp */}
               <div style={styles.field}>
                 <label style={styles.label}>Nomor WhatsApp</label>
                 <div style={styles.waInputWrap}>
                   <span style={styles.waPrefix}>+62</span>
                   <input
                     style={{ ...styles.input, border: 'none', borderRadius: 0, flex: 1, outline: 'none' }}
-                    type="tel"
-                    placeholder="812-3456-7890"
+                    type="tel" placeholder="812-3456-7890"
                     value={form.nomor_whatsapp}
                     onChange={(e) => setForm({ ...form, nomor_whatsapp: e.target.value })}
                   />
@@ -665,15 +774,13 @@ const KelolaPetugas = () => {
                   <select style={styles.input} value={form.pml_id}
                     onChange={(e) => setForm({ ...form, pml_id: e.target.value })}>
                     <option value="">-- Pilih PML --</option>
-                    {pmlList.map((p) => (
-                      <option key={p.id} value={p.id}>{p.nama}</option>
-                    ))}
+                    {pmlList.map((p) => <option key={p.id} value={p.id}>{p.nama}</option>)}
                   </select>
                 </div>
               )}
             </div>
 
-            {/* Kode SLS di form — hanya PPL */}
+            {/* Kode SLS — hanya untuk PPL */}
             {form.role === 'ppl' && (
               <div style={{ marginBottom: 16 }}>
                 <label style={{ ...styles.label, display: 'block', marginBottom: 6 }}>Kode SLS</label>
@@ -683,21 +790,12 @@ const KelolaPetugas = () => {
                     <option value="">Pilih Kode SLS</option>
                     {wilayahList
                       .filter((w) => {
-                        const usedWilayahIds = users
+                        const usedIds = users
                           .filter((u) => u.role === 'ppl' && u.id !== editingId)
-                          .flatMap((u) =>
-                            Array.isArray(u.wilayah_ids) ? u.wilayah_ids.map(Number) : []
-                          );
-                        return (
-                          !form.wilayah_ids.includes(w.id) &&
-                          !usedWilayahIds.includes(Number(w.id))
-                        );
+                          .flatMap((u) => Array.isArray(u.wilayah_ids) ? u.wilayah_ids.map(Number) : []);
+                        return !form.wilayah_ids.includes(w.id) && !usedIds.includes(Number(w.id));
                       })
-                      .map((w) => (
-                        <option key={w.id} value={w.id}>
-                          {slsLabel(w)}
-                        </option>
-                      ))}
+                      .map((w) => <option key={w.id} value={w.id}>{slsLabel(w)}</option>)}
                   </select>
                   <button type="button" onClick={addWilayahForm} style={styles.addBtn}>+ Tambah</button>
                 </div>
@@ -718,13 +816,9 @@ const KelolaPetugas = () => {
                           <span style={{ ...styles.colKode, fontWeight: 700, color: '#1e3a5f' }}>{w.kode_sls}</span>
                           <span style={styles.colKel}>{w.kelurahan}</span>
                           <span style={styles.colKec}>{w.kecamatan}</span>
-                          <span style={{ ...styles.colTarget, fontWeight: 700, color: '#1e3a5f' }}>
-                            {Number(w.target || 0)}
-                          </span>
+                          <span style={{ ...styles.colTarget, fontWeight: 700, color: '#1e3a5f' }}>{Number(w.target || 0)}</span>
                           <span style={styles.colAksi}>
-                            <button type="button" onClick={() => removeWilayahForm(id)} style={styles.deleteBtn}>
-                              Hapus
-                            </button>
+                            <button type="button" onClick={() => removeWilayahForm(id)} style={styles.deleteBtn}>Hapus</button>
                           </span>
                         </div>
                       );
@@ -735,19 +829,29 @@ const KelolaPetugas = () => {
             )}
 
             <button type="submit" style={styles.submitBtn}>
-              {editingId ? 'Update Petugas' : 'Simpan Petugas'}
+              {editingId ? '💾 Update Petugas' : '✅ Simpan Petugas'}
             </button>
           </form>
         </div>
       )}
 
-      {/* Tabel */}
+      {/* ── Tabel ── */}
       <div style={styles.tableWrap}>
         <table style={styles.table}>
           <thead>
             <tr>
+              {/* Select-all checkbox */}
+              <th style={{ ...styles.th, width: 40, textAlign: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={allChecked}
+                  ref={(el) => { if (el) el.indeterminate = someChecked && !allChecked; }}
+                  onChange={toggleSelectAll}
+                  style={{ cursor: 'pointer', accentColor: '#1e3a5f', width: 15, height: 15 }}
+                />
+              </th>
               <th style={styles.th}>Nama</th>
-              <th style={styles.th}>Username</th>
+              <th style={styles.th}>Email</th>
               <th style={styles.th}>Role</th>
               {isPplTab && <th style={styles.th}>PML Atasan</th>}
               <th style={styles.th}>No. WhatsApp</th>
@@ -761,105 +865,64 @@ const KelolaPetugas = () => {
           </tbody>
         </table>
       </div>
+
     </div>
   );
 };
 
-// ── Styles ──────────────────────────────────────────────────────────────────
+// ── Styles ───────────────────────────────────────────────────────────────────
 const styles = {
-  container:  { padding: '1.5rem', height: '100%', overflowY: 'auto' },
-  statsRow:   { display: 'flex', gap: 16, marginBottom: 20 },
-  statCard: {
-    flex: 1, backgroundColor: 'white', borderRadius: 12,
-    padding: '1rem', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
-  },
-  statNum:   { fontSize: 28, fontWeight: 800, color: '#1e3a5f' },
-  statLabel: { fontSize: 12, color: '#64748b', marginTop: 4 },
-  pesan:     { padding: '10px 16px', borderRadius: 8, marginBottom: 16, fontWeight: 600, fontSize: 13 },
-  rowBetween: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  tabs: { display: 'flex', gap: 4, background: '#f1f5f9', borderRadius: 8, padding: 3 },
-  tab: {
-    padding: '6px 16px', border: 'none', borderRadius: 6,
-    fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'transparent', color: '#64748b'
-  },
-  tabActive: { background: '#1e3a5f', color: 'white' },
-  addBtn: {
-    padding: '8px 16px', backgroundColor: '#1e3a5f', color: 'white',
-    border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer'
-  },
-  cancelBtn: {
-    padding: '8px 14px', backgroundColor: '#f1f5f9', color: '#64748b',
-    border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer'
-  },
-  formCard: {
-    backgroundColor: 'white', borderRadius: 12, padding: '1.5rem',
-    marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
-  },
-  formTitle: { margin: '0 0 1rem 0', color: '#1e3a5f', fontSize: 14 },
-  formGrid:  { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 },
-  field:     { display: 'flex', flexDirection: 'column', gap: 4 },
-  label:     { fontSize: 12, fontWeight: 600, color: '#374151' },
-  input:     { padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, outline: 'none' },
-  submitBtn: {
-    padding: '10px 24px', backgroundColor: '#1e3a5f', color: 'white',
-    border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer'
-  },
-  waInputWrap: {
-    display: 'flex', alignItems: 'center',
-    border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden'
-  },
-  waPrefix: {
-    padding: '8px 10px', background: '#f8fafc', fontSize: 13,
-    color: '#64748b', borderRight: '1px solid #e2e8f0', whiteSpace: 'nowrap', flexShrink: 0
-  },
-  waLink:  { color: '#16a34a', fontSize: 12, textDecoration: 'none' },
-  waEmpty: { color: '#94a3b8', fontSize: 12 },
-  tableWrap: { backgroundColor: 'white', borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  table:     { width: '100%', borderCollapse: 'collapse' },
-  th: {
-    padding: '10px 14px', background: '#f8fafc', fontSize: 11, fontWeight: 700,
-    color: '#64748b', textAlign: 'left', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0'
-  },
-  tr:    { borderBottom: '1px solid #f1f5f9' },
-  td:    { padding: '10px 14px', fontSize: 13, color: '#334155' },
-  badge: { padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 },
-  editBtn: {
-    padding: '5px 12px', backgroundColor: '#eef2ff', color: '#4f46e5',
-    border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600
-  },
-  deleteBtn: {
-    padding: '5px 12px', backgroundColor: '#fee2e2', color: '#dc2626',
-    border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600
-  },
-  empty: { textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 },
-  expandPanel:  { background: '#f8fafc', padding: '16px 20px', borderTop: '2px solid #e2e8f0' },
-  expandHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  expandTitle:  { fontSize: 13, fontWeight: 700, color: '#1e3a5f' },
-  slsTableHeader: {
-    display: 'flex', alignItems: 'center', padding: '6px 12px',
-    background: '#f1f5f9', borderRadius: 6, fontSize: 11, fontWeight: 700, color: '#94a3b8',
-    textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4
-  },
-  slsRow: {
-    display: 'flex', alignItems: 'center', padding: '9px 12px',
-    background: 'white', borderRadius: 8, marginBottom: 4,
-    fontSize: 13, color: '#334155', boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-  },
+  container:   { padding: '1.5rem', height: '100%', overflowY: 'auto' },
+  statsRow:    { display: 'flex', gap: 16, marginBottom: 20 },
+  statCard:    { flex: 1, backgroundColor: 'white', borderRadius: 12, padding: '1rem', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
+  statNum:     { fontSize: 28, fontWeight: 800, color: '#1e3a5f' },
+  statLabel:   { fontSize: 12, color: '#64748b', marginTop: 4 },
+  pesan:       { padding: '10px 16px', borderRadius: 8, marginBottom: 16, fontWeight: 600, fontSize: 13 },
+  rowBetween:  { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  tabs:        { display: 'flex', gap: 4, background: '#f1f5f9', borderRadius: 8, padding: 3 },
+  tab:         { padding: '6px 16px', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'transparent', color: '#64748b' },
+  tabActive:   { background: '#1e3a5f', color: 'white' },
+  addBtn:      { padding: '8px 16px', backgroundColor: '#1e3a5f', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  cancelBtn:   { padding: '8px 14px', backgroundColor: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  // ── BARU ──
+  deleteBulkBtn: { padding: '8px 16px', backgroundColor: '#fee2e2', color: '#dc2626', border: '1.5px solid #fca5a5', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' },
+  importBtn:     { padding: '8px 16px', backgroundColor: '#f0fdf4', color: '#16a34a', border: '1.5px solid #86efac', borderRadius: 8, fontSize: 13, fontWeight: 600 },
+  templateBtn:   { padding: '8px 16px', backgroundColor: '#f8fafc', color: '#475569', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  importResultBox: { backgroundColor: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '12px 16px', marginBottom: 16 },
+  // ────────────
+  formCard:    { backgroundColor: 'white', borderRadius: 12, padding: '1.5rem', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
+  formTitle:   { margin: '0 0 1rem 0', color: '#1e3a5f', fontSize: 14 },
+  formGrid:    { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 },
+  field:       { display: 'flex', flexDirection: 'column', gap: 4 },
+  label:       { fontSize: 12, fontWeight: 600, color: '#374151' },
+  input:       { padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, outline: 'none' },
+  submitBtn:   { padding: '10px 24px', backgroundColor: '#1e3a5f', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  waInputWrap: { display: 'flex', alignItems: 'center', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' },
+  waPrefix:    { padding: '8px 10px', background: '#f8fafc', fontSize: 13, color: '#64748b', borderRight: '1px solid #e2e8f0', whiteSpace: 'nowrap', flexShrink: 0 },
+  waLink:      { color: '#16a34a', fontSize: 12, textDecoration: 'none' },
+  waEmpty:     { color: '#94a3b8', fontSize: 12 },
+  tableWrap:   { backgroundColor: 'white', borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
+  table:       { width: '100%', borderCollapse: 'collapse' },
+  th:          { padding: '10px 14px', background: '#f8fafc', fontSize: 11, fontWeight: 700, color: '#64748b', textAlign: 'left', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' },
+  tr:          { borderBottom: '1px solid #f1f5f9' },
+  td:          { padding: '10px 14px', fontSize: 13, color: '#334155' },
+  badge:       { padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 },
+  editBtn:     { padding: '5px 12px', backgroundColor: '#eef2ff', color: '#4f46e5', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 },
+  deleteBtn:   { padding: '5px 12px', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 },
+  empty:       { textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 },
+  expandPanel:    { background: '#f8fafc', padding: '16px 20px', borderTop: '2px solid #e2e8f0' },
+  expandHeader:   { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  expandTitle:    { fontSize: 13, fontWeight: 700, color: '#1e3a5f' },
+  slsTableHeader: { display: 'flex', alignItems: 'center', padding: '6px 12px', background: '#f1f5f9', borderRadius: 6, fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 },
+  slsRow:         { display: 'flex', alignItems: 'center', padding: '9px 12px', background: 'white', borderRadius: 8, marginBottom: 4, fontSize: 13, color: '#334155', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
   colKode:   { flex: '0 0 120px' },
   colKel:    { flex: 1 },
   colKec:    { flex: 1 },
   colTarget: { flex: '0 0 70px', textAlign: 'right', paddingRight: 8 },
   colAksi:   { flex: '0 0 80px', display: 'flex', justifyContent: 'flex-end' },
-  slsEmpty: { padding: '12px', color: '#94a3b8', fontSize: 13, fontStyle: 'italic', marginBottom: 10 },
-  addSlsBtn: {
-    padding: '7px 16px', backgroundColor: 'white', color: '#1e3a5f',
-    border: '1.5px dashed #1e3a5f', borderRadius: 8,
-    fontSize: 12, fontWeight: 600, cursor: 'pointer', marginTop: 8
-  },
-  addSlsBox: {
-    display: 'flex', gap: 8, alignItems: 'center', marginTop: 8,
-    padding: '10px 12px', background: 'white', borderRadius: 8, border: '1px solid #e2e8f0'
-  }
+  slsEmpty:  { padding: '12px', color: '#94a3b8', fontSize: 13, fontStyle: 'italic', marginBottom: 10 },
+  addSlsBtn: { padding: '7px 16px', backgroundColor: 'white', color: '#1e3a5f', border: '1.5px dashed #1e3a5f', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', marginTop: 8 },
+  addSlsBox: { display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, padding: '10px 12px', background: 'white', borderRadius: 8, border: '1px solid #e2e8f0' }
 };
 
 export default KelolaPetugas;

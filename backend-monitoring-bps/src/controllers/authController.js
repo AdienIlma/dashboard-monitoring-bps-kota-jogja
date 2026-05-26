@@ -6,17 +6,17 @@ const login = async (req, res) => {
   console.log('Headers:', req.headers);
   console.log('Body:', req.body);
 
-  const { username, password } = req.body || {};
+  const { email, password } = req.body || {};
 
-  if (!username || !password) {
-    return res.status(400).json({ message: 'Username dan password wajib diisi' });
+  if (!email || !password) {
+    return res.status(400).json({ message: 'email dan password wajib diisi' });
   }
 
   try {
-    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     const user = result.rows[0];
 
-    if (!user) return res.status(401).json({ message: 'Username tidak ditemukan' });
+    if (!user) return res.status(401).json({ message: 'email tidak ditemukan' });
 
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(401).json({ message: 'Password salah' });

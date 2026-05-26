@@ -4,7 +4,7 @@ const getMyPPL = async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
-        u.id, u.nama, u.username,
+        u.id, u.nama, u.email,
         COALESCE(SUM(i.ke_lapangan), 0) as total_ke_lapangan,
         COALESCE(SUM(i.submit), 0) as total_submit,
         COALESCE(SUM(i.approve), 0) as total_approve,
@@ -12,7 +12,7 @@ const getMyPPL = async (req, res) => {
       FROM users u
       LEFT JOIN input_harian i ON i.ppl_id = u.id
       WHERE u.pml_id = $1
-      GROUP BY u.id, u.nama, u.username
+      GROUP BY u.id, u.nama, u.email
       ORDER BY u.nama
     `, [req.user.id]);
     res.json(result.rows);
