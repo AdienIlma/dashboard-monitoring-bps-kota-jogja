@@ -495,90 +495,57 @@ const getDashboardPetugasDetailHarian = async (req, res) => {
 // GET sebaran petugas untuk peta
 const getDashboardSebaranPetugas = async (req, res) => {
   try {
-    // Ambil semua PML dan PPL beserta status login + wilayah
-    const users = await pool.query(`
-      SELECT DISTINCT ON (u.id)
-        u.id, u.nama, u.role, u.pml_id, u.is_logged_in,
-        w.kecamatan, w.kelurahan
-      FROM users u
-      LEFT JOIN wilayah w 
-        ON (u.role = 'ppl' AND w.ppl_id = u.id)
-        OR (u.role = 'pml' AND w.pml_id = u.id)
-      WHERE u.role IN ('pml','ppl')
-      ORDER BY u.id, u.role, u.nama
-`   );
-
-    // Ambil lokasi terakhir setiap user
-    const lokasi = await pool.query(`
-      SELECT DISTINCT ON (user_id)
-        user_id,
-        latitude AS lat,
-        longitude AS lng,
-        recorded_at
-      FROM lokasi
-      ORDER BY user_id, recorded_at DESC
-    `);
-
-    // Buat mapping lokasi
-    const lokasiMap = {};
-    lokasi.rows.forEach((l) => {
-      lokasiMap[l.user_id] = l;
-    });
-
-    // Gabungkan data user + lokasi
-    const result = users.rows.map((u) => ({
-      id: u.id,
-      nama: u.nama,
-      role: u.role,
-      pml_id: u.pml_id,
-      kecamatan: u.kecamatan || null,
-      kelurahan: u.kelurahan || null,
-      lat: lokasiMap[u.id] ? parseFloat(lokasiMap[u.id].lat) : null,
-      lng: lokasiMap[u.id] ? parseFloat(lokasiMap[u.id].lng) : null,
-      recorded_at: lokasiMap[u.id]?.recorded_at || null,
-      online: u.is_logged_in,
-      punya_lokasi: !!lokasiMap[u.id],
-    }));
-
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({
-      message: "Gagal ambil sebaran petugas",
-      error: err.message,
-    });
-  }
-};
-
-// GET progress 15 hari terakhir
-const getDashboardProgress15Hari = async (req, res) => {
-  try {
     const result = await pool.query(`
-      SELECT
-        tanggal,
-        COALESCE(SUM(ke_lapangan), 0) AS sudah_ke_lapangan,
-        COALESCE(SUM(submit), 0) AS submit,
-        COALESCE(SUM(approve), 0) AS approve
-      FROM input_harian
-      WHERE tanggal >= CURRENT_DATE - INTERVAL '15 days'
-      GROUP BY tanggal
-      ORDER BY tanggal ASC
+      SELECT DISTINCT ON (u.id)
+        u.id,
+        u.nama,
+        u.role,
+        u.pml_id,
+        u.nomor_whatsapp,
+
+        l.latitude AS lat,
+        l.longitude AS lng,
+        l.recorded_at,
+
+        w.kecamatan,
+        w.kelurahan,
+
+
+        CASE
+          WHEN l.recorded_at >= NOW() - INTERVAL '15 minutes'
+            AND u.is_logged_in = TRUE
+          THEN true
+          ELSE false
+        END AS online,
+
+        CASE
+          WHEN l.latitude IS NOT NULL
+          AND l.longitude IS NOT NULL
+          THEN true
+          ELSE false
+        END AS punya_lokasi
+
+      FROM users u
+
+      LEFT JOIN lokasi l
+        ON l.user_id = u.id
+
+      LEFT JOIN wilayah w
+        ON w.ppl_id = u.id
+
+      ORDER BY
+        u.id,
+        l.recorded_at DESC
     `);
 
-    res.json(
-      result.rows.map((r) => ({
-        tanggal: new Date(r.tanggal).toLocaleDateString("id-ID", {
-          day: "numeric",
-          month: "short",
-        }),
-        sudahKeLapangan: parseInt(r.sudah_ke_lapangan),
-        submit: parseInt(r.submit),
-        approve: parseInt(r.approve),
-      })),
-    );
+    res.json(result.rows);
+
   } catch (err) {
+    console.error(err);
+
     res.status(500).json({
-      message: "Gagal ambil progress 15 hari",
-      error: err.message,
+      message: 'Gagal ambil sebaran petugas',
+      error: err.message
     });
   }
 };
@@ -586,232 +553,122 @@ const getDashboardProgress15Hari = async (req, res) => {
 // UPDATE user
 const updateUser = async (req, res) => {
   const { id } = req.params;
-  const {
-    nama,
-    username,
-    role,
-    pml_id,
-    password,
-    nomor_whatsapp,
-    target,
-    wilayah_ids = []
-  } = req.body;
+  const { nama, username, password, role, pml_id, nomor_whatsapp, target, wilayah_ids = [] } = req.body;
 
   try {
-    const cek = await pool.query(
-      "SELECT id FROM users WHERE username = $1 AND id != $2",
-      [username, id]
-    );
+    let query, params;
 
-    if (cek.rows.length > 0) {
-      return res.status(400).json({
-        message: "Username sudah digunakan",
-      });
-    }
-
-    const params = [
-      nama,
-      username,
-      role,
-      role === "ppl" ? pml_id : null,
-      nomor_whatsapp || null,
-      Number(target) || 0
-    ];
-
-    if (password && password.trim() !== "") {
+    if (password) {
       const hashed = await bcrypt.hash(password, 10);
-
-      await pool.query(
-        `UPDATE users
-         SET nama = $1,
-             username = $2,
-             role = $3,
-             pml_id = $4,
-             nomor_whatsapp = $5,
-             target = $6,
-             password = $7
-         WHERE id = $8`,
-        [...params, hashed, id]
-      );
+      query = `UPDATE users SET nama=$1, username=$2, password=$3, role=$4, pml_id=$5, nomor_whatsapp=$6, target=$7 WHERE id=$8 RETURNING *`;
+      params = [nama, username, hashed, role, role === 'ppl' ? pml_id : null, nomor_whatsapp || null, Number(target) || 0, id];
     } else {
-      await pool.query(
-        `UPDATE users
-         SET nama = $1,
-             username = $2,
-             role = $3,
-             pml_id = $4,
-             nomor_whatsapp = $5,
-             target = $6
-         WHERE id = $7`,
-        [...params, id]
-      );
+      query = `UPDATE users SET nama=$1, username=$2, role=$3, pml_id=$4, nomor_whatsapp=$5, target=$6 WHERE id=$7 RETURNING *`;
+      params = [nama, username, role, role === 'ppl' ? pml_id : null, nomor_whatsapp || null, Number(target) || 0, id];
     }
-await pool.query(
-  "DELETE FROM user_sls WHERE user_id = $1",
-  [id]
-);
 
-  if (role === "ppl" && Array.isArray(wilayah_ids)) {
-    for (const wilayahId of wilayah_ids) {
-      await pool.query(
-        `INSERT INTO user_sls (user_id, wilayah_id)
-        VALUES ($1, $2)
-        ON CONFLICT (user_id, wilayah_id) DO NOTHING`,
-        [id, wilayahId]
-      );
+    const result = await pool.query(query, params);
+    if (result.rows.length === 0) return res.status(404).json({ message: 'User tidak ditemukan' });
+
+    // Update wilayah_ids kalau PPL
+    if (role === 'ppl') {
+      await pool.query('DELETE FROM user_sls WHERE user_id = $1', [id]);
+      for (const wilayahId of wilayah_ids) {
+        await pool.query(
+          'INSERT INTO user_sls (user_id, wilayah_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [id, wilayahId]
+        );
+      }
     }
-  }
-  
-    res.json({ message: "User berhasil diupdate" });
+
+    res.json({ message: 'User berhasil diupdate', user: result.rows[0] });
   } catch (err) {
-    res.status(500).json({
-      message: "Gagal update user",
-      error: err.message,
-    });
+    res.status(500).json({ message: 'Gagal update user', error: err.message });
   }
 };
 
 // DELETE user
 const deleteUser = async (req, res) => {
   const { id } = req.params;
-
   try {
-    await pool.query("DELETE FROM users WHERE id = $1", [id]);
-
-    res.json({
-      message: "User berhasil dihapus",
-    });
+    await pool.query('DELETE FROM user_sls WHERE user_id = $1', [id]);
+    const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING *', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ message: 'User tidak ditemukan' });
+    res.json({ message: 'User berhasil dihapus' });
   } catch (err) {
-    res.status(500).json({
-      message: "Gagal hapus user",
-      error: err.message,
-    });
+    res.status(500).json({ message: 'Gagal hapus user', error: err.message });
   }
 };
 
 // GET wilayah
 const getWilayah = async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT
-        w.*,
-        pml.nama AS nama_pml,
-        ppl.nama AS nama_ppl,
-        us.user_id AS ppl_id_sls
-      FROM wilayah w
-      LEFT JOIN users pml ON w.pml_id = pml.id
-      LEFT JOIN user_sls us ON us.wilayah_id = w.id
-      LEFT JOIN users ppl ON us.user_id = ppl.id
-      ORDER BY w.kecamatan, w.kelurahan
-    `);
-
-    // Kalau 1 wilayah punya beberapa PPL (user_sls), akan ada duplikat row.
-    // Kita return as-is, ProgressPetugas sudah filter by ppl_id
-    res.json(result.rows.map(r => ({
-      ...r,
-      ppl_id: r.ppl_id_sls ?? r.ppl_id, // prioritaskan user_sls
-    })));
+    const result = await pool.query('SELECT * FROM wilayah ORDER BY kecamatan, kelurahan');
+    res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ message: "Gagal ambil wilayah", error: err.message });
+    res.status(500).json({ message: 'Gagal ambil wilayah', error: err.message });
   }
 };
 
-// CREATE wilayah
+// POST wilayah
 const createWilayah = async (req, res) => {
-  const {
-    kode_sls,
-    kecamatan,
-    kelurahan,
-    pml_id,
-    ppl_id,
-    target
-  } = req.body;
-
+  const { kode_sls, kecamatan, kelurahan, target, ppl_id } = req.body;
   try {
-    await pool.query(
-      `INSERT INTO wilayah
-       (kode_sls, kecamatan, kelurahan, pml_id, ppl_id, target)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        kode_sls || null,
-        kecamatan,
-        kelurahan,
-        pml_id || null,
-        ppl_id || null,
-        Number(target) || 0
-      ]
+    const result = await pool.query(
+      'INSERT INTO wilayah (kode_sls, kecamatan, kelurahan, target, ppl_id) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [kode_sls, kecamatan, kelurahan, Number(target) || 0, ppl_id || null]
     );
-
-    res.json({
-      message: 'Wilayah berhasil ditambahkan'
-    });
+    res.status(201).json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({
-      message: 'Gagal tambah wilayah',
-      error: err.message
-    });
+    res.status(500).json({ message: 'Gagal buat wilayah', error: err.message });
   }
 };
 
-// UPDATE wilayah
+// PUT wilayah
 const updateWilayah = async (req, res) => {
   const { id } = req.params;
-  const {
-    kode_sls,
-    kecamatan,
-    kelurahan,
-    pml_id,
-    ppl_id,
-    target
-  } = req.body;
-
+  const { kode_sls, kecamatan, kelurahan, target, ppl_id } = req.body;
   try {
-    await pool.query(
-      `UPDATE wilayah
-       SET kode_sls = $1,
-           kecamatan = $2,
-           kelurahan = $3,
-           pml_id = $4,
-           ppl_id = $5,
-           target = $6
-       WHERE id = $7`,
-      [
-        kode_sls || null,
-        kecamatan,
-        kelurahan,
-        pml_id || null,
-        ppl_id || null,
-        Number(target) || 0,
-        id
-      ]
+    const result = await pool.query(
+      'UPDATE wilayah SET kode_sls=$1, kecamatan=$2, kelurahan=$3, target=$4, ppl_id=$5 WHERE id=$6 RETURNING *',
+      [kode_sls, kecamatan, kelurahan, Number(target) || 0, ppl_id || null, id]
     );
-
-    res.json({
-      message: 'Wilayah berhasil diupdate'
-    });
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Wilayah tidak ditemukan' });
+    res.json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({
-      message: 'Gagal update wilayah',
-      error: err.message
-    });
+    res.status(500).json({ message: 'Gagal update wilayah', error: err.message });
   }
 };
 
 // DELETE wilayah
 const deleteWilayah = async (req, res) => {
   const { id } = req.params;
-
   try {
-    await pool.query("DELETE FROM wilayah WHERE id = $1", [id]);
-
-    res.json({
-      message: "Wilayah berhasil dihapus",
-    });
+    const result = await pool.query('DELETE FROM wilayah WHERE id = $1 RETURNING *', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Wilayah tidak ditemukan' });
+    res.json({ message: 'Wilayah berhasil dihapus' });
   } catch (err) {
-    res.status(500).json({
-      message: "Gagal hapus wilayah",
-      error: err.message,
-    });
+    res.status(500).json({ message: 'Gagal hapus wilayah', error: err.message });
+  }
+};
+
+// GET progress 15 hari
+const getDashboardProgress15Hari = async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        tanggal::date AS tanggal,
+        COALESCE(SUM(ke_lapangan), 0)::int AS ke_lapangan,
+        COALESCE(SUM(submit), 0)::int AS submit,
+        COALESCE(SUM(approve), 0)::int AS approve
+      FROM input_harian
+      WHERE tanggal >= CURRENT_DATE - INTERVAL '14 days'
+      GROUP BY tanggal::date
+      ORDER BY tanggal::date ASC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ message: 'Gagal ambil progress 15 hari', error: err.message });
   }
 };
 
@@ -822,6 +679,10 @@ module.exports = {
   deleteUser,
   getPMLList,
   getPPLByPML,
+  getWilayah,
+  createWilayah,
+  updateWilayah,
+  deleteWilayah,
   getDashboardProgress,
   getDashboardPetugas,
   getDashboardKecamatan,
@@ -830,8 +691,4 @@ module.exports = {
   getDashboardPetugasDetailHarian,
   getDashboardSebaranPetugas,
   getDashboardProgress15Hari,
-  getWilayah,
-  createWilayah,
-  updateWilayah,
-  deleteWilayah,
 };

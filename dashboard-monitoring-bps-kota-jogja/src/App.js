@@ -42,7 +42,7 @@ function LoginPage() {
     setError("");
     try {
       const res = await axios.post(
-        "http://localhost:5000/api/auth/login",
+        "https://api.monitoring-bps-kota-jogja.my.id/api/auth/login",
         { username, password },
         { headers: { "Content-Type": "application/json" } },
       );
@@ -63,13 +63,13 @@ function LoginPage() {
         {error && <div style={loginStyles.error}>{error}</div>}
         <form onSubmit={handleSubmit}>
           <div style={loginStyles.field}>
-            <label style={loginStyles.label}>Username</label>
+            <label style={loginStyles.label}>Email</label>
             <input
               style={loginStyles.input}
-              type="text"
+              type="email"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Masukkan username"
+              placeholder="Masukkan Email"
               required
             />
           </div>

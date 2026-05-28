@@ -4,11 +4,9 @@ import api from "../services/api";
 
 const MENU = [
   { key: "lapangan", label: "Ke Lapangan", color: "#003366" },
-  { key: "submit", label: "Submit", color: "#E8702A" },
-  { key: "approve", label: "Approve", color: "#1D9E75" },
+  { key: "submit",   label: "Submit",       color: "#E8702A" },
 ];
 
-// ── Timezone-aware today ──────────────────────────────────────────────────────
 const getToday = () => {
   const now = new Date();
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
@@ -23,7 +21,7 @@ const DashboardPPL = () => {
   const [loading, setLoading] = useState(true);
 
   const [sesi, setSesi] = useState({
-    tanggal: getToday(), // ← pakai getToday(), bukan toISOString()
+    tanggal: getToday(),
     pml_hadir: false,
   });
 
@@ -31,7 +29,6 @@ const DashboardPPL = () => {
     wilayah_id: "",
     ke_lapangan: "",
     submit: "",
-    approve: "",
     catatan: "",
   });
 
@@ -81,14 +78,12 @@ const DashboardPPL = () => {
     const target = parseInt(w.target);
     if (activeMenu === "lapangan") return parseInt(w.total_lapangan || 0) >= target;
     if (activeMenu === "submit")   return parseInt(w.total_submit   || 0) >= target;
-    if (activeMenu === "approve")  return parseInt(w.total_approve  || 0) >= target;
     return false;
   };
 
   const getProgres = (w) => {
     if (activeMenu === "lapangan") return parseInt(w.total_lapangan || 0);
     if (activeMenu === "submit")   return parseInt(w.total_submit   || 0);
-    if (activeMenu === "approve")  return parseInt(w.total_approve  || 0);
     return 0;
   };
 
@@ -109,7 +104,6 @@ const DashboardPPL = () => {
     const nilai = {
       lapangan: parseInt(form.ke_lapangan) || 0,
       submit:   parseInt(form.submit)      || 0,
-      approve:  parseInt(form.approve)     || 0,
     };
 
     if (nilai[activeMenu] <= 0) {
@@ -133,13 +127,12 @@ const DashboardPPL = () => {
         wilayah_id:  form.wilayah_id,
         ke_lapangan: activeMenu === "lapangan" ? nilai.lapangan : 0,
         submit:      activeMenu === "submit"   ? nilai.submit   : 0,
-        approve:     activeMenu === "approve"  ? nilai.approve  : 0,
         catatan:     form.catatan,
         tanggal:     sesi.tanggal,
         pml_hadir:   sesi.pml_hadir,
       });
       setPesan({ text: "Data berhasil disimpan!", type: "success" });
-      setForm({ wilayah_id: "", ke_lapangan: "", submit: "", approve: "", catatan: "" });
+      setForm({ wilayah_id: "", ke_lapangan: "", submit: "", catatan: "" });
       setSelectedSLS(null);
       fetchAll();
     } catch (err) {
@@ -151,12 +144,10 @@ const DashboardPPL = () => {
 
   const totalLapangan = inputs.reduce((a, b) => a + parseInt(b.ke_lapangan), 0);
   const totalSubmit   = inputs.reduce((a, b) => a + parseInt(b.submit),      0);
-  const totalApprove  = inputs.reduce((a, b) => a + parseInt(b.approve),     0);
 
   const filteredInputs = inputs.filter((i) => {
     if (activeMenu === "lapangan") return parseInt(i.ke_lapangan) > 0;
     if (activeMenu === "submit")   return parseInt(i.submit)      > 0;
-    if (activeMenu === "approve")  return parseInt(i.approve)     > 0;
     return true;
   });
 
@@ -165,13 +156,11 @@ const DashboardPPL = () => {
   const fieldLabel = {
     lapangan: "Jumlah Ke Lapangan",
     submit:   "Jumlah Submit",
-    approve:  "Jumlah Approve",
   };
 
   const fieldKey = {
     lapangan: "ke_lapangan",
     submit:   "submit",
-    approve:  "approve",
   };
 
   return (
@@ -193,7 +182,7 @@ const DashboardPPL = () => {
         {MENU.map((m) => (
           <div key={m.key} style={styles.statCard}>
             <div style={{ ...styles.statNum, color: m.color }}>
-              {m.key === "lapangan" ? totalLapangan : m.key === "submit" ? totalSubmit : totalApprove}
+              {m.key === "lapangan" ? totalLapangan : totalSubmit}
             </div>
             <div style={styles.statLabel}>{m.label}</div>
           </div>
@@ -208,12 +197,11 @@ const DashboardPPL = () => {
             style={styles.input}
             type="date"
             value={sesi.tanggal}
-            max={getToday()} // ← pakai getToday()
+            max={getToday()}
             onChange={(e) => setSesi((s) => ({ ...s, tanggal: e.target.value }))}
             required
           />
         </div>
-
         <div style={styles.field}>
           <label style={styles.label}>Kunjungan PML</label>
           <div
@@ -285,8 +273,6 @@ const DashboardPPL = () => {
           {/* Pilih SLS */}
           <div style={styles.field}>
             <label style={styles.label}>SLS</label>
-
-            {/* Trigger */}
             <div
               onClick={() => setSlsOpen((v) => !v)}
               style={{
@@ -299,9 +285,7 @@ const DashboardPPL = () => {
               }}
             >
               <span style={{ fontSize: 13 }}>
-                {selectedSLS
-                  ? `${selectedSLS.kode_sls || "—"} — ${selectedSLS.kelurahan}`
-                  : "Pilih SLS"}
+                {selectedSLS ? `${selectedSLS.kode_sls || "—"} — ${selectedSLS.kelurahan}` : "Pilih SLS"}
               </span>
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
                 style={{ transform: slsOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s", flexShrink: 0 }}>
@@ -309,7 +293,6 @@ const DashboardPPL = () => {
               </svg>
             </div>
 
-            {/* Dropdown */}
             {slsOpen && (
               <div style={styles.slsDropdown}>
                 {wilayah.length === 0 ? (
@@ -320,26 +303,18 @@ const DashboardPPL = () => {
                     const progres = getProgres(w);
                     const target  = parseInt(w.target || 0);
                     const pct     = target > 0 ? Math.min((progres / target) * 100, 100) : 0;
-
                     return (
                       <div
                         key={w.id}
                         onClick={() => handlePilihSLS(w)}
                         style={{
                           ...styles.slsOption,
-                          backgroundColor:
-                            penuh ? "#FFF8F8"
-                            : form.wilayah_id === w.id ? "#F0F4FF"
-                            : "white",
-                          borderLeft:
-                            penuh ? "3px solid #FECACA"
-                            : form.wilayah_id === w.id ? `3px solid ${activeColor}`
-                            : "3px solid transparent",
+                          backgroundColor: penuh ? "#FFF8F8" : form.wilayah_id === w.id ? "#F0F4FF" : "white",
+                          borderLeft: penuh ? "3px solid #FECACA" : form.wilayah_id === w.id ? `3px solid ${activeColor}` : "3px solid transparent",
                           opacity: penuh ? 0.75 : 1,
                           cursor:  penuh ? "not-allowed" : "pointer",
                         }}
                       >
-                        {/* Kode + badge */}
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
                           <span style={styles.slsKode}>{w.kode_sls || "—"}</span>
                           {penuh ? (
@@ -348,21 +323,12 @@ const DashboardPPL = () => {
                             <span style={styles.badgeProgres}>{progres}/{target}</span>
                           ) : null}
                         </div>
-
-                        {/* Nama */}
                         <div style={styles.slsNama}>
-                          {w.kelurahan}
-                          <span style={styles.slsKec}>, {w.kecamatan}</span>
+                          {w.kelurahan}<span style={styles.slsKec}>, {w.kecamatan}</span>
                         </div>
-
-                        {/* Progress bar */}
                         {target > 0 && (
                           <div style={styles.progressWrap}>
-                            <div style={{
-                              ...styles.progressBar,
-                              width: `${pct}%`,
-                              backgroundColor: penuh ? "#EF4444" : activeColor,
-                            }} />
+                            <div style={{ ...styles.progressBar, width: `${pct}%`, backgroundColor: penuh ? "#EF4444" : activeColor }} />
                           </div>
                         )}
                       </div>
@@ -372,7 +338,6 @@ const DashboardPPL = () => {
               </div>
             )}
 
-            {/* Preview SLS terpilih */}
             {selectedSLS && (
               <div style={styles.slsPreview}>
                 <div style={styles.slsPreviewRow}>
@@ -461,7 +426,7 @@ const DashboardPPL = () => {
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 22, fontWeight: 500, color: activeColor }}>
-                  {activeMenu === "lapangan" ? i.ke_lapangan : activeMenu === "submit" ? i.submit : i.approve}
+                  {activeMenu === "lapangan" ? i.ke_lapangan : i.submit}
                 </div>
                 <div style={{ fontSize: 9, color: "#9AA5B4", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   {MENU.find((m) => m.key === activeMenu)?.label}

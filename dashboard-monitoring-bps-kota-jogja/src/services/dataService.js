@@ -1,12 +1,16 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://localhost:5000/api",
+  baseURL: "https://api.monitoring-bps-kota-jogja.my.id/api",
 });
 
 api.interceptors.request.use((config) => {
   const token = sessionStorage.getItem("token");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
   return config;
 });
 
@@ -31,8 +35,9 @@ export const getKecamatanData = async () => {
 // ─── Tabel Harian ────────────────────────────────────────────
 export const getKecamatanHarianData = async (tanggal) => {
   const res = await api.get(
-    `/admin/dashboard/kecamatan/harian?tanggal=${tanggal}`,
+    `/admin/dashboard/kecamatan/harian?tanggal=${tanggal}`
   );
+
   return res.data;
 };
 
@@ -48,17 +53,18 @@ export const getProgress15Hari = async () => {
   return res.data;
 };
 
-// ─── Progres Petugas (detail total) ────────────────────────────────
+// ─── Progres Petugas (detail total) ──────────────────────────
 export const getPetugasDetail = async () => {
   const res = await api.get("/admin/dashboard/petugas-detail");
   return res.data;
 };
 
-// ─── Progres Petugas Harian ────────────────────────────────
+// ─── Progres Petugas Harian ──────────────────────────────────
 export const getPetugasDetailHarian = async (tanggal) => {
   const res = await api.get(
-    `/admin/dashboard/petugas-detail-harian?tanggal=${tanggal}`,
+    `/admin/dashboard/petugas-detail-harian?tanggal=${tanggal}`
   );
+
   return res.data;
 };
 
@@ -66,3 +72,5 @@ export const getWilayahData = async () => {
   const res = await api.get("/admin/wilayah");
   return res.data;
 };
+
+export default api;

@@ -60,16 +60,53 @@ const inputHarian = async (req, res) => {
 
 const kirimLokasi = async (req, res) => {
   const { latitude, longitude } = req.body;
+
   try {
-    await pool.query(
-      "INSERT INTO lokasi (user_id, latitude, longitude) VALUES ($1,$2,$3)",
-      [req.user.id, latitude, longitude],
+    // cek apakah user sudah punya lokasi
+    const cek = await pool.query(
+      'SELECT id FROM lokasi WHERE user_id = $1',
+      [req.user.id]
     );
-    res.json({ message: "Lokasi tersimpan" });
+
+    if (cek.rows.length > 0) {
+      // update lokasi lama
+      await pool.query(
+        `
+        UPDATE lokasi
+        SET latitude = $1,
+            longitude = $2,
+            recorded_at = CURRENT_TIMESTAMP
+        WHERE user_id = $3
+        `,
+        [latitude, longitude, req.user.id]
+      );
+    } else {
+      // insert pertama kali
+      await pool.query(
+        `
+        INSERT INTO lokasi (
+          user_id,
+          latitude,
+          longitude,
+          recorded_at
+        )
+        VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+        `,
+        [req.user.id, latitude, longitude]
+      );
+    }
+
+    res.json({
+      message: 'Lokasi berhasil disimpan'
+    });
+
   } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Gagal simpan lokasi", error: err.message });
+    console.error('ERROR LOKASI:', err);
+
+    res.status(500).json({
+      message: 'Gagal simpan lokasi',
+      error: err.message
+    });
   }
 };
 

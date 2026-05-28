@@ -4,8 +4,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { getSebaranPetugas } from "../services/dataService";
 
-// ─── FlyToMarker: terbang ke koordinat target saat search berubah ──────────
-// Pakai lat/lng primitive + key unik agar useEffect selalu trigger
+// ─── FlyToMarker ───────────────────────────────────────────────────────────
 const FlyToMarker = ({ lat, lng, triggerKey }) => {
   const map = useMap();
   useEffect(() => {
@@ -210,6 +209,13 @@ const DetailPetugas = ({ petugas, sebaranData, wilayahData, onBack, onNavigate }
     ? `https://wa.me/${petugas.nomor_whatsapp.replace(/[^0-9]/g, "").replace(/^0/, "62")}`
     : null;
 
+  // ── FIX: helper untuk format koordinat dengan aman ────────────────────
+  const formatKoordinat = (val) => {
+    if (val == null) return "—";
+    const num = parseFloat(val);
+    return isNaN(num) ? "—" : num.toFixed(6);
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, overflowY: "auto", height: "100%" }}>
       {/* Tombol kembali */}
@@ -282,13 +288,14 @@ const DetailPetugas = ({ petugas, sebaranData, wilayahData, onBack, onNavigate }
               <span style={{ fontSize: 12, color: "#B0BAC6" }}>—</span>
             )}
           </div>
+          {/* FIX: pakai formatKoordinat() agar aman dari string/null */}
           <div style={rowStyle}>
             <span style={keyStyle}>Latitude</span>
-            <span style={valStyle}>{petugas.lat != null ? petugas.lat.toFixed(6) : "—"}</span>
+            <span style={valStyle}>{formatKoordinat(petugas.lat)}</span>
           </div>
           <div style={rowStyle}>
             <span style={keyStyle}>Longitude</span>
-            <span style={valStyle}>{petugas.lng != null ? petugas.lng.toFixed(6) : "—"}</span>
+            <span style={valStyle}>{formatKoordinat(petugas.lng)}</span>
           </div>
           {petugas.kecamatan && (
             <div style={rowStyle}>
@@ -461,12 +468,18 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
   const [filterKelurahan, setFilterKelurahan] = useState("");
   const [filterPML, setFilterPML] = useState("");
   const [search, setSearch] = useState("");
-  const [flyTarget, setFlyTarget] = useState(null); // { lat, lng, key }
+  const [flyTarget, setFlyTarget] = useState(null);
 
+  // ── FIX: normalize lat/lng ke number saat data masuk ──────────────────
   const fetchData = useCallback(async () => {
     try {
       const data = await getSebaranPetugas();
-      setSebaranData(data);
+      const normalized = data.map((p) => ({
+        ...p,
+        lat: p.lat != null && p.lat !== "" ? parseFloat(p.lat) : null,
+        lng: p.lng != null && p.lng !== "" ? parseFloat(p.lng) : null,
+      }));
+      setSebaranData(normalized);
       setLastUpdate(new Date());
     } catch (err) {
       console.error("Gagal ambil sebaran:", err);
@@ -484,12 +497,10 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
   const pmlOnline = pmlList.filter((p) => p.online).length;
   const pplOnline = pplList.filter((p) => p.online).length;
 
-  // ── SLS valid dari wilayahData ─────────────────────────────────────────
   const slsData = (wilayahData || []).filter(
     (w) => w.kode_sls && w.kode_sls.trim() !== ""
   );
 
-  // ── Opsi Kecamatan & Kelurahan dari SLS ───────────────────────────────
   const kecamatanOptions = [
     ...new Set(slsData.map((w) => w.kecamatan).filter(Boolean)),
   ]
@@ -507,8 +518,6 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
     .sort()
     .map((k) => ({ value: k, label: k }));
 
-  // ── Opsi PML: juga ikut filter wilayah SLS ────────────────────────────
-  // Kumpulkan ppl_id yang punya SLS di wilayah terpilih, lalu ambil pml_id-nya
   const pplIdsWithSLSInWilayah = filterKecamatan || filterKelurahan
     ? new Set(
         slsData
@@ -519,7 +528,7 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
           })
           .map((w) => w.ppl_id)
       )
-    : null; // null = tidak ada filter wilayah aktif
+    : null;
 
   const pmlIdsWithSLSInWilayah = pplIdsWithSLSInWilayah
     ? new Set(
@@ -533,7 +542,6 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
     .filter((p) => !pmlIdsWithSLSInWilayah || pmlIdsWithSLSInWilayah.has(p.id))
     .map((p) => ({ value: String(p.id), label: p.nama }));
 
-  // ── Helper: apakah PML/PPL lolos filter wilayah SLS? ─────────────────
   const pmlLulusFilterWilayah = (pml) => {
     if (!pmlIdsWithSLSInWilayah) return true;
     return pmlIdsWithSLSInWilayah.has(pml.id);
@@ -544,7 +552,6 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
     return pplIdsWithSLSInWilayah.has(ppl.id);
   };
 
-  // ── Handler kecamatan: reset kelurahan, PML, selectedPML ─────────────
   const handleKecamatanChange = (val) => {
     setFilterKecamatan(val);
     setFilterKelurahan("");
@@ -558,20 +565,18 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
     setSelectedPML(null);
   };
 
-  // ── Filter marker PML di peta ─────────────────────────────────────────
+  // ── FIX: filter marker — lat/lng sudah pasti number setelah normalize ─
   const filteredPML = pmlList.filter((p) => {
-    if (p.lat == null || p.lng == null) return false;
+    if (p.lat == null || p.lng == null || isNaN(p.lat) || isNaN(p.lng)) return false;
     if (filterPML && String(p.id) !== filterPML) return false;
     if (search && !p.nama.toLowerCase().includes(search.toLowerCase())) return false;
-    // Filter utama: PML punya PPL dengan SLS di wilayah terpilih
     if (!pmlLulusFilterWilayah(p)) return false;
     return true;
   });
 
-  // ── Filter marker PPL di peta (hanya online, sudah kirim lokasi, dan
-  //    dipilih lewat selectedPML) ──────────────────────────────────────
   const filteredPPL = pplList.filter((p) => {
     if (!p.online || !p.punya_lokasi) return false;
+    if (p.lat == null || p.lng == null || isNaN(p.lat) || isNaN(p.lng)) return false;
     if (!selectedPML || p.pml_id !== selectedPML) return false;
     if (!pplLulusFilterWilayah(p)) return false;
     const q = search.toLowerCase();
@@ -590,21 +595,18 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
 
   const adaFilter = filterKecamatan || filterKelurahan || filterPML || search;
 
-  // ── Auto fly ke marker saat search berubah ────────────────────────────
   useEffect(() => {
     if (!search.trim()) { setFlyTarget(null); return; }
     const q = search.toLowerCase();
     const candidates = sebaranData.filter(
-      (p) => p.lat != null && p.lng != null && p.nama.toLowerCase().includes(q)
+      (p) => p.lat != null && p.lng != null && !isNaN(p.lat) && !isNaN(p.lng) && p.nama.toLowerCase().includes(q)
     );
     if (candidates.length === 0) { setFlyTarget(null); return; }
     const exact = candidates.find((p) => p.nama.toLowerCase() === q);
     const match = exact ?? candidates[0];
-    // key = Date.now() memastikan useEffect di FlyToMarker selalu re-trigger
     setFlyTarget({ lat: match.lat, lng: match.lng, key: Date.now() });
   }, [search, sebaranData]);
 
-  // ── Navigasi detail ────────────────────────────────────────────────────
   const openDetail = (petugas) => {
     if (detailPetugas) {
       setDetailHistory((h) => [...h, detailPetugas]);
@@ -622,7 +624,6 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
     }
   };
 
-  // ── Mode detail ────────────────────────────────────────────────────────
   if (detailPetugas) {
     return (
       <DetailPetugas
@@ -662,7 +663,6 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
 
       {/* Filter bar */}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-        {/* Search */}
         <div style={{ position: "relative", flex: 2, minWidth: 120 }}>
           <svg width="11" height="11" viewBox="0 0 11 11" fill="none"
             style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
@@ -675,7 +675,6 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
           />
         </div>
 
-        {/* Kecamatan — dari SLS */}
         <SearchableSelect
           value={filterKecamatan}
           onChange={handleKecamatanChange}
@@ -683,7 +682,6 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
           placeholder="Semua Kecamatan"
         />
 
-        {/* Kelurahan — dari SLS, bergantung kecamatan */}
         <SearchableSelect
           value={filterKelurahan}
           onChange={handleKelurahanChange}
@@ -691,7 +689,6 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
           placeholder="Semua Kelurahan"
         />
 
-        {/* PML — ikut filter wilayah */}
         <SearchableSelect
           value={filterPML}
           onChange={(val) => { setFilterPML(val); setSelectedPML(null); }}

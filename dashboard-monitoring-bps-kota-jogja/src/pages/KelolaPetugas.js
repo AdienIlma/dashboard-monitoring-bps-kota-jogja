@@ -623,8 +623,8 @@ const KelolaPetugas = () => {
                   onChange={(e) => setForm({ ...form, nama: e.target.value })} required />
               </div>
               <div style={styles.field}>
-                <label style={styles.label}>Username</label>
-                <input style={styles.input} type="text" value={form.username}
+                <label style={styles.label}>Email</label>
+                <input style={styles.input} type="email" placeholder='contoh@gmail.com' value={form.username}
                   onChange={(e) => setForm({ ...form, username: e.target.value })} required />
               </div>
               <div style={styles.field}>
@@ -747,7 +747,7 @@ const KelolaPetugas = () => {
           <thead>
             <tr>
               <th style={styles.th}>Nama</th>
-              <th style={styles.th}>Username</th>
+              <th style={styles.th}>Email</th>
               <th style={styles.th}>Role</th>
               {isPplTab && <th style={styles.th}>PML Atasan</th>}
               <th style={styles.th}>No. WhatsApp</th>

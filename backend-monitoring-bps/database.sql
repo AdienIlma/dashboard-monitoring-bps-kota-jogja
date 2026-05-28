@@ -7,7 +7,6 @@ CREATE TABLE users (
   role         VARCHAR(10)  NOT NULL CHECK (role IN ('admin', 'pml', 'ppl')),
   pml_id       INTEGER      REFERENCES users(id) ON DELETE SET NULL,
   is_logged_in BOOLEAN      DEFAULT FALSE,
-  nomor        VARCHAR(50),
   nomor_whatsapp VARCHAR(20),
   target       INTEGER      DEFAULT 0,
   created_at   TIMESTAMP    DEFAULT NOW()
