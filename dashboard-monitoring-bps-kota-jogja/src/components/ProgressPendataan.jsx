@@ -1,9 +1,6 @@
 import React from "react";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
-const COLORS = ["#003366", "#E8702A", "#1D9E75", "#E8ECF0"];
-
-const StatCard = ({ label, value, persen, color }) => (
+const StatCard = ({ label, value, color }) => (
   <div
     style={{
       background: "#F7F8FA",
@@ -28,188 +25,192 @@ const StatCard = ({ label, value, persen, color }) => (
     >
       {label}
     </div>
-    <div
-      style={{ fontSize: 20, fontWeight: 500, color: color, lineHeight: 1.1 }}
-    >
-      {value}
+    <div style={{ fontSize: 20, fontWeight: 500, color, lineHeight: 1.1 }}>
+      {(value ?? 0).toLocaleString("id-ID")}
     </div>
-    <div style={{ fontSize: 9, color: "#B0BAC6", marginTop: 1 }}>{persen}%</div>
   </div>
 );
 
-const CustomTooltip = ({ active, payload }) => {
-  if (active && payload && payload.length) {
-    return (
+const BAR_COLORS = {
+  Target: "#6C47C4",
+  "Ke Lapangan": "#003366",
+  Submit: "#E8702A",
+  Approve: "#1D9E75",
+  Belum: "#9AA5B4",
+};
+const ProgressBar = ({ name, value, pct, color, target }) => {
+  const barWidth = Math.min((value / target) * 100, 100);
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {/* Label */}
       <div
         style={{
-          background: "#1A2B42",
-          color: "#fff",
-          borderRadius: 8,
-          padding: "5px 10px",
+          width: 72,
           fontSize: 11,
+          color: "#9AA5B4",
+          textAlign: "right",
+          flexShrink: 0,
         }}
       >
-        <span style={{ fontWeight: 500 }}>{payload[0].name}</span>:{" "}
-        {payload[0].value}%
+        {name}
       </div>
-    );
-  }
-  return null;
+
+      {/* Track */}
+      <div
+        style={{
+          flex: 1,
+          height: 28,
+          background: "#F7F8FA",
+          border: "1px solid #EBEEF2",
+          borderRadius: 5,
+          overflow: "hidden",
+          position: "relative",
+        }}
+      >
+        {/* Fill */}
+        <div
+          style={{
+            width: `${barWidth}%`,
+            height: "100%",
+            background: color,
+            borderRadius: 5,
+            display: "flex",
+            alignItems: "center",
+            paddingLeft: 10,
+            boxSizing: "border-box",
+            transition: "width 0.6s ease",
+          }}
+        >
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: "#fff",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {value.toLocaleString("id-ID")}
+          </span>
+        </div>
+      </div>
+
+      {/* Persen */}
+      <div
+        style={{
+          width: 36,
+          fontSize: 11,
+          color: "#9AA5B4",
+          textAlign: "right",
+          flexShrink: 0,
+        }}
+      >
+        {pct}%
+      </div>
+    </div>
+  );
 };
 
 const ProgressPendataan = ({ data }) => {
-  if (!data)
+  if (!data) {
     return (
       <div style={{ padding: 12, color: "#9AA5B4", fontSize: 13 }}>
         Memuat data...
       </div>
     );
+  }
 
-  const chartData = [
-    { name: "Ke Lapangan", value: parseFloat(data.sudahKeLapanganChartPersen) },
-    { name: "Submit", value: parseFloat(data.submitChartPersen) },
-    { name: "Approve", value: parseFloat(data.approvePersen2) },
-    { name: "Belum", value: parseFloat(data.belumPersen) },
+  const target     = data.target          ?? 0;
+  const keLapangan = data.sudahKeLapangan ?? 0;
+  const submit     = data.submit          ?? 0;
+  const approve    = data.approve         ?? 0;
+  const belum = Math.max(target - approve, 0);
+
+  const rows = [
+    {
+      name: "Target",
+      value: target,
+      pct: 100,
+      color: BAR_COLORS["Target"],
+    },
+    {
+      name: "Ke Lapangan",
+      value: keLapangan,
+      pct: data.sudahKeLapanganPersen ?? 0,
+      color: BAR_COLORS["Ke Lapangan"],
+    },
+    {
+      name: "Submit",
+      value: submit,
+      pct: data.submitPersen ?? 0,
+      color: BAR_COLORS["Submit"],
+    },
+    {
+      name: "Approve",
+      value: approve,
+      pct: data.approvePersen ?? 0,
+      color: BAR_COLORS["Approve"],
+    },
+    {
+      name: "Belum",
+      value: belum,
+      pct:
+        target > 0
+          ? Number(((belum / target) * 100).toFixed(2))
+          : 0,
+      color: BAR_COLORS["Belum"],
+    },
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div
+        style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    background: "#FFFFFF",
+    border: "1px solid #EBEEF2",
+    borderRadius: 10,
+    padding: "12px 14px",
+  }}
+    >
+      {/* Header */}
       <div
         style={{
           fontSize: 11,
-          fontWeight: 500,
+          fontWeight: 600,
           color: "#9AA5B4",
-          letterSpacing: "0.07em",
+          letterSpacing: "0.1em",
           textTransform: "uppercase",
-          borderBottom: "1px solid #F0F2F5",
-          paddingBottom: 6,
+          borderBottom: "1px solid rgba(255,255,255,0.07)",
+          paddingBottom: 8,
           display: "flex",
           alignItems: "center",
           gap: 6,
         }}
       >
-        <i
-          className="ti ti-chart-pie"
-          style={{ fontSize: 13, color: "#E8702A" }}
-          aria-hidden="true"
-        />
+        <i className="ti ti-filter" style={{ fontSize: 13, color: "#E8702A" }} aria-hidden="true" />
         Progress Pendataan
       </div>
 
+      {/* Stat Cards */}
       <div style={{ display: "flex", gap: 6 }}>
-        <StatCard
-          label="Ke Lapangan"
-          value={data.sudahKeLapangan}
-          persen={data.sudahKeLapanganPersen}
-          color="#003366"
-        />
-        <StatCard
-          label="Submit"
-          value={data.submit}
-          persen={data.submitPersen}
-          color="#E8702A"
-        />
-        <StatCard
-          label="Approve"
-          value={data.approve}
-          persen={data.approvePersen}
-          color="#1D9E75"
-        />
+        <StatCard label="Ke Lapangan" value={keLapangan} color="#003366" />
+        <StatCard label="Submit"      value={submit}     color="#E8702A" />
+        <StatCard label="Approve"     value={approve}    color="#1D9E75" />
       </div>
 
-      <div style={{ position: "relative" }}>
-        <ResponsiveContainer width="100%" height={150}>
-          <PieChart>
-            <Pie
-              data={chartData}
-              cx="50%"
-              cy="50%"
-              innerRadius={42}
-              outerRadius={62}
-              paddingAngle={2}
-              dataKey="value"
-              startAngle={90}
-              endAngle={-270}
-            >
-              {chartData.map((entry, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={COLORS[index]}
-                  stroke="none"
-                />
-              ))}
-            </Pie>
-            <Tooltip content={<CustomTooltip />} />
-          </PieChart>
-        </ResponsiveContainer>
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            textAlign: "center",
-            pointerEvents: "none",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 9,
-              color: "#9AA5B4",
-              fontWeight: 500,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-            }}
-          >
-            TARGET
-          </div>
-          <div
-            style={{
-              fontSize: 17,
-              fontWeight: 500,
-              color: "#1A2B42",
-              lineHeight: 1.2,
-            }}
-          >
-            {data.target.toLocaleString("id-ID")}
-          </div>
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "3px 10px",
-        }}
-      >
-        {chartData.map((item, i) => (
-          <div
-            key={i}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              fontSize: 10,
-              color: "#7A8899",
-            }}
-          >
-            <div
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: "50%",
-                background: COLORS[i],
-                flexShrink: 0,
-              }}
-            />
-            <span>{item.name}</span>
-            <span
-              style={{ marginLeft: "auto", fontWeight: 500, color: "#1A2B42" }}
-            >
-              {item.value}%
-            </span>
-          </div>
+      {/* Bars */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+        {rows.map((row) => (
+          <ProgressBar
+            key={row.name}
+            name={row.name}
+            value={row.value}
+            pct={row.pct}
+            color={row.color}
+            target={target}
+          />
         ))}
       </div>
     </div>

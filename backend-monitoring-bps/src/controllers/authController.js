@@ -4,7 +4,6 @@ const jwt = require('jsonwebtoken');
 
 const login = async (req, res) => {
   console.log('=== LOGIN REQUEST ===');
-  console.log('Headers:', req.headers);
   console.log('Body:', req.body);
 
   const { username, password } = req.body || {};
@@ -16,16 +15,12 @@ const login = async (req, res) => {
   }
 
   try {
-    console.log('Cari user...');
-
-    const result = await pool.query(
-      'SELECT * FROM users WHERE username = $1',
+    const [rows] = await pool.query(
+      'SELECT * FROM users WHERE username = ?',
       [username]
     );
 
-    console.log('Query result:', result.rows);
-
-    const user = result.rows[0];
+    const user = rows[0];
 
     if (!user) {
       return res.status(401).json({
@@ -33,21 +28,13 @@ const login = async (req, res) => {
       });
     }
 
-    console.log('User ditemukan:', user.username);
-
-    console.log('Cek password...');
     const valid = await bcrypt.compare(password, user.password);
-
-    console.log('Password valid:', valid);
 
     if (!valid) {
       return res.status(401).json({
         message: 'Password salah',
       });
     }
-
-    console.log('JWT_SECRET:', process.env.JWT_SECRET);
-    console.log('JWT_EXPIRES_IN:', process.env.JWT_EXPIRES_IN);
 
     const token = jwt.sign(
       {
@@ -57,18 +44,35 @@ const login = async (req, res) => {
       },
       process.env.JWT_SECRET,
       {
-        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+        expiresIn: process.env.JWT_EXPIRES_IN || '8h',
       }
     );
 
-    console.log('Token berhasil dibuat');
+    console.log('=== SEBELUM UPDATE ===');
+    const [sebelumRows] = await pool.query(
+      'SELECT id, nama, username, is_logged_in FROM users WHERE id = ?',
+      [user.id]
+    );
+    console.log(sebelumRows[0]);
 
     await pool.query(
-      'UPDATE users SET is_logged_in = TRUE WHERE id = $1',
+      'UPDATE users SET is_logged_in = TRUE WHERE id = ?',
       [user.id]
     );
 
-    console.log('Login sukses');
+    console.log('=== SETELAH UPDATE ===');
+    const [sesudahRows] = await pool.query(
+      'SELECT id, nama, username, is_logged_in FROM users WHERE id = ?',
+      [user.id]
+    );
+    console.log(sesudahRows[0]);
+
+    console.log('LOGIN BERHASIL:', {
+      id: user.id,
+      nama: user.nama,
+      username: user.username,
+      role: user.role,
+    });
 
     res.json({
       token,
@@ -83,17 +87,26 @@ const login = async (req, res) => {
     res.status(500).json({
       message: 'Server error',
       error: err.message,
-      stack: err.stack,
     });
   }
 };
 
 const logout = async (req, res) => {
   try {
+    console.log('=== LOGOUT ===');
+    console.log('User ID:', req.user.id);
+
     await pool.query(
-      'UPDATE users SET is_logged_in = FALSE WHERE id = $1',
+      'UPDATE users SET is_logged_in = FALSE WHERE id = ?',
       [req.user.id]
     );
+
+    const [cekRows] = await pool.query(
+      'SELECT id, nama, username, is_logged_in FROM users WHERE id = ?',
+      [req.user.id]
+    );
+
+    console.log('SETELAH LOGOUT:', cekRows[0]);
 
     res.json({
       message: 'Logout berhasil',
@@ -109,4 +122,7 @@ const logout = async (req, res) => {
   }
 };
 
-module.exports = { login, logout };
+module.exports = {
+  login,
+  logout,
+};

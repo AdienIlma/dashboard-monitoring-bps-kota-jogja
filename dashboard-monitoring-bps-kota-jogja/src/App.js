@@ -29,26 +29,43 @@ import {
 import axios from "axios";
 
 // ─── Halaman Login ───────────────────────────────────────────
+// ─── Halaman Login ───────────────────────────────────────────
 function LoginPage() {
   const { login } = useAuth();
+
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     setLoading(true);
     setError("");
+
     try {
       const res = await axios.post(
-        "https://api.monitoring-bps-kota-jogja.my.id/api/auth/login",
-        { username, password },
-        { headers: { "Content-Type": "application/json" } },
+        "http://localhost:5000/api/auth/login",
+        {
+          username,
+          password,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
       );
+
       login(res.data);
     } catch (err) {
-      setError(err.response?.data?.message || "Login gagal");
+      console.error("LOGIN ERROR:", err);
+
+      setError(
+        err.response?.data?.message || "Login gagal"
+      );
     } finally {
       setLoading(false);
     }
@@ -57,34 +74,73 @@ function LoginPage() {
   return (
     <div style={loginStyles.container}>
       <div style={loginStyles.card}>
-        <div style={loginStyles.logo}>📊</div>
-        <h2 style={loginStyles.title}>BPS Kota Yogyakarta</h2>
-        <p style={loginStyles.subtitle}>Sistem Monitoring Pendataan</p>
-        {error && <div style={loginStyles.error}>{error}</div>}
+        <img
+  src="/logo-sensus.png"
+  alt="Logo BPS"
+  style={{
+    maxWidth: "110px",
+    maxHeight: "110px",
+    width: "auto",
+    height: "auto",
+    display: "block",
+    margin: "0 auto 16px auto",
+  }}
+/>
+
+        <h2 style={loginStyles.title}>
+          BPS Kota Yogyakarta
+        </h2>
+
+        <p style={loginStyles.subtitle}>
+          Sistem Monitoring Pendataan
+        </p>
+
+        {error && (
+          <div style={loginStyles.error}>
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
           <div style={loginStyles.field}>
-            <label style={loginStyles.label}>Email</label>
+            <label style={loginStyles.label}>
+              Username
+            </label>
+
             <input
               style={loginStyles.input}
-              type="email"
+              type="text"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Masukkan Email"
+              onChange={(e) =>
+                setUsername(e.target.value)
+              }
+              placeholder="Masukkan username"
               required
             />
           </div>
+
           <div style={loginStyles.field}>
-            <label style={loginStyles.label}>Password</label>
+            <label style={loginStyles.label}>
+              Password
+            </label>
+
             <input
               style={loginStyles.input}
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) =>
+                setPassword(e.target.value)
+              }
               placeholder="Masukkan password"
               required
             />
           </div>
-          <button style={loginStyles.button} type="submit" disabled={loading}>
+
+          <button
+            style={loginStyles.button}
+            type="submit"
+            disabled={loading}
+          >
             {loading ? "Memproses..." : "Masuk"}
           </button>
         </form>
@@ -100,8 +156,10 @@ const loginStyles = {
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#0f172a",
-    backgroundImage: "radial-gradient(ellipse at top, #1e3a5f 0%, #0f172a 70%)",
+    backgroundImage:
+      "radial-gradient(ellipse at top, #1e3a5f 0%, #0f172a 70%)",
   },
+
   card: {
     backgroundColor: "white",
     padding: "2.5rem",
@@ -110,7 +168,13 @@ const loginStyles = {
     width: "100%",
     maxWidth: "380px",
   },
-  logo: { textAlign: "center", fontSize: "2.5rem", marginBottom: "0.5rem" },
+
+  logo: {
+    textAlign: "center",
+    fontSize: "2.5rem",
+    marginBottom: "0.5rem",
+  },
+
   title: {
     textAlign: "center",
     color: "#1e3a5f",
@@ -118,12 +182,14 @@ const loginStyles = {
     fontSize: "1.4rem",
     fontWeight: "800",
   },
+
   subtitle: {
     textAlign: "center",
     color: "#64748b",
     marginBottom: "1.5rem",
     fontSize: "0.85rem",
   },
+
   error: {
     backgroundColor: "#fee2e2",
     color: "#dc2626",
@@ -133,7 +199,11 @@ const loginStyles = {
     fontSize: "0.85rem",
     textAlign: "center",
   },
-  field: { marginBottom: "1rem" },
+
+  field: {
+    marginBottom: "1rem",
+  },
+
   label: {
     display: "block",
     marginBottom: "6px",
@@ -141,6 +211,7 @@ const loginStyles = {
     fontWeight: "600",
     fontSize: "0.875rem",
   },
+
   input: {
     width: "100%",
     padding: "10px 12px",
@@ -150,6 +221,7 @@ const loginStyles = {
     boxSizing: "border-box",
     outline: "none",
   },
+
   button: {
     width: "100%",
     padding: "12px",
@@ -262,9 +334,28 @@ function AdminDashboard() {
   }}
   onMouseLeave={() => setShowNavbar(false)}
 >
-        <span style={navStyles.title}>
-          📊 Dashboard Monitoring BPS Kota Yogyakarta
-        </span>
+        <div
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  }}
+>
+  <img
+    src="/logo-sensus.png"
+    alt="Logo"
+    style={{
+      width: 28,
+      height: 28,
+      objectFit: "contain",
+    }}
+  />
+
+  <span style={navStyles.title}>
+    Dashboard Monitoring BPS Kota Yogyakarta
+  </span>
+</div>
+
         <div style={navStyles.tabs}>
           {[
             ["monitor", "📊 Monitor"],

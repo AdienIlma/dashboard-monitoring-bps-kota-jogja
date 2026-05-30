@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 
-// ─── SearchableSelect ─────────────────
+// SearchableSelect 
 const SearchableSelect = ({ value, onChange, options, placeholder }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -145,7 +145,7 @@ const SearchableSelect = ({ value, onChange, options, placeholder }) => {
   );
 };
 
-// ─── Komponen Utama ────────────────────────────────────────────────────────
+// Komponen Utama
 const ProgressPetugas = ({
   petugasDetailData,
   petugasHarianData,
@@ -169,7 +169,7 @@ const ProgressPetugas = ({
   // SLS valid (punya kode_sls)
   const slsData = (wilayahData || []).filter((w) => w.kode_sls && w.kode_sls.trim() !== "");
 
-  // ── Opsi filter dari wilayahData (SLS) ──────────────────────────────────
+  // Opsi filter dari wilayahData (SLS)
   // Kecamatan: semua kecamatan yang ada di SLS
   const kecamatanOptions = [
     ...new Set(slsData.map((w) => w.kecamatan).filter(Boolean)),
@@ -226,7 +226,7 @@ const ProgressPetugas = ({
     }
   };
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
+  // Handlers 
   const handleKecamatanChange = (val) => {
     setFilterKecamatan(val);
     setFilterKelurahan(""); // reset kelurahan kalau kecamatan berubah
@@ -257,7 +257,7 @@ const ProgressPetugas = ({
 
   const adaFilter = filterKecamatan || filterKelurahan || filterPML || search;
 
-  // ── Filter PML untuk tabel ────────────────────────────────────────────────
+  // Filter PML untuk tabel
   const filteredPML = pmlList
     .filter((pml) => {
       if (filterPML && String(pml.id) !== filterPML) return false;
@@ -278,7 +278,7 @@ const ProgressPetugas = ({
       };
     });
 
-  // ─── Styles ───────────────────────────────────────────────────────────────
+  // Styles
   const headerStyle = {
     background: "#F7F8FA", padding: "7px 10px", fontSize: 9, fontWeight: 500,
     color: "#9AA5B4", textTransform: "uppercase", letterSpacing: "0.06em",
@@ -302,7 +302,7 @@ const ProgressPetugas = ({
     );
   };
 
-  // ─── Badge kehadiran ──────────────────────────────────────────────────────
+  // Badge kehadiran
   const renderHadirBadge = (petugas) => {
     if (activeTab === "total") {
       const n = petugas.jumlahHadir ?? 0;
@@ -333,7 +333,7 @@ const ProgressPetugas = ({
     }
   };
 
-  // ─── Row PML ──────────────────────────────────────────────────────────────
+  // Row PML
   const renderPMLRow = (pml) => (
     <tr key={`pml-${pml.id}`} style={{ backgroundColor: "white" }}>
       <td style={{ ...cellStyle, textAlign: "left" }}>
@@ -377,7 +377,7 @@ const ProgressPetugas = ({
     </tr>
   );
 
-  // ─── Row PPL (expandable → SLS) ──────────────────────────────────────────
+  // Row PPL (expandable → SLS)
   const renderPPLRow = (ppl) => {
     // SLS milik PPL ini — jika filter wilayah aktif, hanya tampilkan SLS yang cocok
     const slsMilikPPL = slsData.filter((w) => {
@@ -505,7 +505,7 @@ const ProgressPetugas = ({
         textTransform: "uppercase", borderBottom: "1px solid #F0F2F5", paddingBottom: 10,
         display: "flex", alignItems: "center", gap: 6,
       }}>
-        <i className="ti ti-users" style={{ fontSize: 14, color: "#003366" }} aria-hidden="true" />
+        <i className="ti ti-users" style={{ fontSize: 14, color: "#E8702A" }} aria-hidden="true" />
         Progress Petugas
       </div>
 
