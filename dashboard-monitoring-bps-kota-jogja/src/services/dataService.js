@@ -1,18 +1,4 @@
-import axios from "axios";
-
-const api = axios.create({
-  baseURL: "http://localhost:5000/api",
-});
-
-api.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem("token");
-
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-
-  return config;
-});
+import api from "./api";
 
 // ─── Progress Pendataan ──────────────────────────────────────
 export const getProgressData = async () => {
@@ -34,10 +20,7 @@ export const getKecamatanData = async () => {
 
 // ─── Tabel Harian ────────────────────────────────────────────
 export const getKecamatanHarianData = async (tanggal) => {
-  const res = await api.get(
-    `/admin/dashboard/kecamatan/harian?tanggal=${tanggal}`
-  );
-
+  const res = await api.get(`/admin/dashboard/kecamatan/harian?tanggal=${tanggal}`);
   return res.data;
 };
 
@@ -61,16 +44,12 @@ export const getPetugasDetail = async () => {
 
 // ─── Progres Petugas Harian ──────────────────────────────────
 export const getPetugasDetailHarian = async (tanggal) => {
-  const res = await api.get(
-    `/admin/dashboard/petugas-detail-harian?tanggal=${tanggal}`
-  );
-
+  const res = await api.get(`/admin/dashboard/petugas-detail-harian?tanggal=${tanggal}`);
   return res.data;
 };
 
+// ─── Wilayah ─────────────────────────────────────────────────
 export const getWilayahData = async () => {
   const res = await api.get("/admin/wilayah");
   return res.data;
 };
-
-export default api;

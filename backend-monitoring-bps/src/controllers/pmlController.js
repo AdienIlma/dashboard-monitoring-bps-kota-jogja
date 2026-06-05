@@ -1,41 +1,51 @@
 const pool = require('../config/db');
 
-// Helper: apakah PPL berada di bawah PML yang sedang login
+const isDev = process.env.NODE_ENV !== 'production';
+
+// ─── Helper ────────────────────────────────────────────────────────────────
+
 const cekKepemilikanPPL = async (ppl_id, pml_id) => {
   const [rows] = await pool.query(
-    'SELECT id FROM users WHERE id = ? AND pml_id = ?',
+    'SELECT id FROM users WHERE id = ? AND pml_id = ? LIMIT 1',
     [ppl_id, pml_id]
   );
   return rows.length > 0;
 };
 
-// Helper: log error di server, kirim pesan generik ke client
 const handleError = (res, err, message = 'Terjadi kesalahan server') => {
-  console.error(err);
-  res.status(500).json({ message });
+  console.error(message, ':', err.message);
+  res.status(500).json({
+    message,
+    ...(isDev && { error: err.message }),
+  });
 };
+
+// ─── 1. DATA RINGKASAN SEMUA PPL MILIK PML ─────────────────────────────────
 
 const getMyPPL = async (req, res) => {
   try {
-    const [rows] = await pool.query(`
-      SELECT 
-        u.id, u.nama, u.username AS email,
-        COALESCE(SUM(i.ke_lapangan), 0) AS total_ke_lapangan,
-        COALESCE(SUM(i.submit),      0) AS total_submit,
-        COALESCE(SUM(i.approve),     0) AS total_approve,
-        COUNT(i.id)                     AS total_input
-      FROM users u
-      LEFT JOIN input_harian i ON i.ppl_id = u.id
-      WHERE u.pml_id = ?
-      GROUP BY u.id, u.nama, u.username
-      ORDER BY u.nama
-    `, [req.user.id]);
+    const [rows] = await pool.query(
+      `SELECT
+         u.id, u.nama, u.username AS email,
+         COALESCE(SUM(i.ke_lapangan), 0) AS total_ke_lapangan,
+         COALESCE(SUM(i.submit),      0) AS total_submit,
+         COALESCE(SUM(i.approve),     0) AS total_approve,
+         COUNT(i.id)                     AS total_input
+       FROM users u
+       LEFT JOIN input_harian i ON i.ppl_id = u.id
+       WHERE u.pml_id = ?
+       GROUP BY u.id, u.nama, u.username
+       ORDER BY u.nama`,
+      [req.user.id]
+    );
 
-    res.json(rows);
+    return res.json(rows);
   } catch (err) {
-    handleError(res, err, 'Gagal mengambil data PPL');
+    return handleError(res, err, 'Gagal mengambil data PPL');
   }
 };
+
+// ─── 2. INPUT HARIAN MILIK 1 PPL ───────────────────────────────────────────
 
 const getInputsByPPL = async (req, res) => {
   const ppl_id = parseInt(req.params.ppl_id);
@@ -50,19 +60,25 @@ const getInputsByPPL = async (req, res) => {
       return res.status(403).json({ message: 'PPL tidak di bawah anda' });
     }
 
-    const [rows] = await pool.query(`
-      SELECT i.*, w.kecamatan, w.kelurahan
-      FROM input_harian i
-      JOIN wilayah w ON i.wilayah_id = w.id
-      WHERE i.ppl_id = ?
-      ORDER BY i.created_at DESC
-    `, [ppl_id]);
+    const [rows] = await pool.query(
+      `SELECT
+         i.id, i.wilayah_id, i.ke_lapangan, i.submit, i.approve,
+         i.catatan, i.tanggal, i.pml_hadir, i.created_at,
+         w.kecamatan, w.kelurahan
+       FROM input_harian i
+       JOIN wilayah w ON i.wilayah_id = w.id
+       WHERE i.ppl_id = ?
+       ORDER BY i.created_at DESC`,
+      [ppl_id]
+    );
 
-    res.json(rows);
+    return res.json(rows);
   } catch (err) {
-    handleError(res, err, 'Gagal mengambil data input');
+    return handleError(res, err, 'Gagal mengambil data input');
   }
 };
+
+// ─── 3. WILAYAH + PROGRES MILIK 1 PPL ──────────────────────────────────────
 
 const getWilayahByPPL = async (req, res) => {
   const ppl_id = parseInt(req.params.ppl_id);
@@ -77,28 +93,27 @@ const getWilayahByPPL = async (req, res) => {
       return res.status(403).json({ message: 'PPL tidak di bawah anda' });
     }
 
-    const [rows] = await pool.query(`
-      SELECT
-        w.id,
-        w.kode_sls,
-        w.kelurahan,
-        w.kecamatan,
-        w.target,
-        COALESCE(SUM(i.submit),  0) AS total_submit,
-        COALESCE(SUM(i.approve), 0) AS total_approve
-      FROM wilayah w
-      LEFT JOIN user_sls us ON us.wilayah_id = w.id AND us.user_id = ?
-      LEFT JOIN input_harian i  ON i.wilayah_id  = w.id AND i.ppl_id   = ?
-      WHERE w.ppl_id = ? OR us.user_id = ?
-      GROUP BY w.id, w.kode_sls, w.kelurahan, w.kecamatan, w.target
-      ORDER BY w.kelurahan
-    `, [ppl_id, ppl_id, ppl_id, ppl_id]);
+    const [rows] = await pool.query(
+      `SELECT
+         w.id, w.kode_sls, w.kelurahan, w.kecamatan, w.target,
+         COALESCE(SUM(i.submit),  0) AS total_submit,
+         COALESCE(SUM(i.approve), 0) AS total_approve
+       FROM wilayah w
+       LEFT JOIN user_sls us    ON us.wilayah_id = w.id AND us.user_id = ?
+       LEFT JOIN input_harian i ON i.wilayah_id  = w.id AND i.ppl_id   = ?
+       WHERE w.ppl_id = ? OR us.user_id = ?
+       GROUP BY w.id, w.kode_sls, w.kelurahan, w.kecamatan, w.target
+       ORDER BY w.kelurahan`,
+      [ppl_id, ppl_id, ppl_id, ppl_id]
+    );
 
-    res.json(rows);
+    return res.json(rows);
   } catch (err) {
-    handleError(res, err, 'Gagal mengambil data wilayah');
+    return handleError(res, err, 'Gagal mengambil data wilayah');
   }
 };
+
+// ─── 4. SIMPAN APPROVE ─────────────────────────────────────────────────────
 
 const simpanApprove = async (req, res) => {
   const ppl_id     = parseInt(req.body.ppl_id);
@@ -124,13 +139,14 @@ const simpanApprove = async (req, res) => {
       return res.status(403).json({ message: 'PPL tidak di bawah anda' });
     }
 
-    const [progresRows] = await pool.query(`
-      SELECT
-        COALESCE(SUM(submit),  0) AS total_submit,
-        COALESCE(SUM(approve), 0) AS total_approve
-      FROM input_harian
-      WHERE ppl_id = ? AND wilayah_id = ?
-    `, [ppl_id, wilayah_id]);
+    const [progresRows] = await pool.query(
+      `SELECT
+         COALESCE(SUM(submit),  0) AS total_submit,
+         COALESCE(SUM(approve), 0) AS total_approve
+       FROM input_harian
+       WHERE ppl_id = ? AND wilayah_id = ?`,
+      [ppl_id, wilayah_id]
+    );
 
     const totalSubmit  = parseInt(progresRows[0].total_submit);
     const totalApprove = parseInt(progresRows[0].total_approve);
@@ -142,16 +158,20 @@ const simpanApprove = async (req, res) => {
       });
     }
 
-    await pool.query(`
-      INSERT INTO input_harian (ppl_id, wilayah_id, ke_lapangan, submit, approve, catatan, tanggal)
-      VALUES (?, ?, 0, 0, ?, ?, CURDATE())
-    `, [ppl_id, wilayah_id, approve, catatan]);
+    await pool.query(
+      `INSERT INTO input_harian
+         (ppl_id, wilayah_id, ke_lapangan, submit, approve, catatan, tanggal)
+       VALUES (?, ?, 0, 0, ?, ?, CURDATE())`,
+      [ppl_id, wilayah_id, approve, catatan]
+    );
 
-    res.json({ message: 'Approve berhasil disimpan' });
+    return res.json({ message: 'Approve berhasil disimpan' });
   } catch (err) {
-    handleError(res, err, 'Gagal menyimpan approve');
+    return handleError(res, err, 'Gagal menyimpan approve');
   }
 };
+
+// ─── 5. KIRIM LOKASI GEOLOCATION ───────────────────────────────────────────
 
 const kirimLokasi = async (req, res) => {
   const { latitude, longitude } = req.body;
@@ -159,7 +179,7 @@ const kirimLokasi = async (req, res) => {
   if (
     typeof latitude  !== 'number' || typeof longitude !== 'number' ||
     isNaN(latitude)  || isNaN(longitude) ||
-    latitude  < -90  || latitude  > 90  ||
+    latitude  < -90  || latitude  > 90   ||
     longitude < -180 || longitude > 180
   ) {
     return res.status(400).json({ message: 'Koordinat latitude/longitude tidak valid' });
@@ -167,28 +187,28 @@ const kirimLokasi = async (req, res) => {
 
   try {
     const [cekRows] = await pool.query(
-      'SELECT id FROM lokasi WHERE user_id = ?',
+      'SELECT id FROM lokasi WHERE user_id = ? LIMIT 1',
       [req.user.id]
     );
 
     if (cekRows.length > 0) {
-      await pool.query(`
-        UPDATE lokasi
-        SET latitude    = ?,
-            longitude   = ?,
-            recorded_at = CURRENT_TIMESTAMP
-        WHERE user_id = ?
-      `, [latitude, longitude, req.user.id]);
+      await pool.query(
+        `UPDATE lokasi
+         SET latitude = ?, longitude = ?, recorded_at = CURRENT_TIMESTAMP
+         WHERE user_id = ?`,
+        [latitude, longitude, req.user.id]
+      );
     } else {
-      await pool.query(`
-        INSERT INTO lokasi (user_id, latitude, longitude, recorded_at)
-        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-      `, [req.user.id, latitude, longitude]);
+      await pool.query(
+        `INSERT INTO lokasi (user_id, latitude, longitude, recorded_at)
+         VALUES (?, ?, ?, CURRENT_TIMESTAMP)`,
+        [req.user.id, latitude, longitude]
+      );
     }
 
-    res.json({ message: 'Lokasi berhasil disimpan' });
+    return res.json({ message: 'Lokasi berhasil disimpan' });
   } catch (err) {
-    handleError(res, err, 'Gagal menyimpan lokasi');
+    return handleError(res, err, 'Gagal menyimpan lokasi');
   }
 };
 

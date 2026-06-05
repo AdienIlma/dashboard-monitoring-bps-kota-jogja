@@ -2,6 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 
+const getToday = () => {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().split('T')[0];
+};
+
 const DashboardPML = () => {
   const { user, logout } = useAuth();
   const [pplList, setPplList]         = useState([]);
@@ -11,12 +17,13 @@ const DashboardPML = () => {
   const [loadingMap, setLoadingMap]   = useState({});
   const [loading, setLoading]         = useState(true);
 
-  const [selectedSLS, setSelectedSLS]     = useState({});
-  const [slsOpen, setSlsOpen]             = useState({});
-  const [jumlahApprove, setJumlahApprove] = useState({});
-  const [catatan, setCatatan]             = useState({});
-  const [submitLoading, setSubmitLoading] = useState({});
-  const [pesan, setPesan]                 = useState({});
+  const [selectedSLS, setSelectedSLS]       = useState({});
+  const [slsOpen, setSlsOpen]               = useState({});
+  const [jumlahApprove, setJumlahApprove]   = useState({});
+  const [tanggalApprove, setTanggalApprove] = useState({});
+  const [riwayatOpen, setRiwayatOpen]       = useState({});
+  const [submitLoading, setSubmitLoading]   = useState({});
+  const [pesan, setPesan]                   = useState({});
 
   useEffect(() => {
     fetchPPL();
@@ -40,8 +47,10 @@ const DashboardPML = () => {
     try {
       const res = await api.get(`/pml/inputs/${ppl_id}`);
       setInputs(prev => ({ ...prev, [ppl_id]: res.data }));
+      return res.data;
     } catch (err) {
       console.error('Gagal fetch inputs', err);
+      return [];
     }
   };
 
@@ -50,9 +59,11 @@ const DashboardPML = () => {
     try {
       const res = await api.get(`/pml/wilayah/${ppl_id}`);
       setWilayahMap(prev => ({ ...prev, [ppl_id]: res.data }));
+      return res.data;
     } catch (err) {
       console.error('Gagal fetch wilayah', err);
       setWilayahMap(prev => ({ ...prev, [ppl_id]: [] }));
+      return [];
     } finally {
       setLoadingMap(prev => ({ ...prev, [ppl_id]: false }));
     }
@@ -66,6 +77,8 @@ const DashboardPML = () => {
     } else {
       setExpandedPPL(id);
       setSlsOpen(prev => ({ ...prev, [id]: false }));
+      // Set tanggal default hari ini saat buka accordion
+      setTanggalApprove(prev => ({ ...prev, [id]: getToday() }));
       if (!inputs[id])     fetchInputs(id);
       if (!wilayahMap[id]) fetchWilayah(id);
     }
@@ -92,11 +105,16 @@ const DashboardPML = () => {
 
   const handleApprove = async (e, ppl_id) => {
     e.preventDefault();
-    const sls    = selectedSLS[ppl_id];
-    const jumlah = parseInt(jumlahApprove[ppl_id]) || 0;
+    const sls     = selectedSLS[ppl_id];
+    const jumlah  = parseInt(jumlahApprove[ppl_id]) || 0;
+    const tanggal = tanggalApprove[ppl_id];
 
     if (!sls) {
       setPesan(prev => ({ ...prev, [ppl_id]: { text: 'SLS wajib dipilih!', type: 'error' } }));
+      return;
+    }
+    if (!tanggal) {
+      setPesan(prev => ({ ...prev, [ppl_id]: { text: 'Tanggal wajib dipilih!', type: 'error' } }));
       return;
     }
     if (jumlah <= 0) {
@@ -111,25 +129,55 @@ const DashboardPML = () => {
 
     setSubmitLoading(prev => ({ ...prev, [ppl_id]: true }));
     setPesan(prev => ({ ...prev, [ppl_id]: { text: '', type: '' } }));
+
     try {
       await api.post('/pml/approve', {
         ppl_id,
         wilayah_id: sls.id,
         approve:    jumlah,
-        catatan:    catatan[ppl_id] || '',
+        tanggal:    tanggal,
       });
+
       setPesan(prev => ({ ...prev, [ppl_id]: { text: '✅ Approve berhasil disimpan!', type: 'success' } }));
-      setSelectedSLS(prev => ({ ...prev, [ppl_id]: null }));
       setJumlahApprove(prev => ({ ...prev, [ppl_id]: '' }));
-      setCatatan(prev => ({ ...prev, [ppl_id]: '' }));
-      fetchInputs(ppl_id);
-      fetchWilayah(ppl_id);
-      fetchPPL();
+
+      const [updatedInputs, , updatedWilayahList] = await Promise.all([
+        fetchInputs(ppl_id),
+        fetchPPL(),
+        fetchWilayah(ppl_id),
+      ]);
+
+      if (updatedWilayahList) {
+        const updatedSls = updatedWilayahList.find(w => w.id === sls.id);
+        if (updatedSls) {
+          const sisaBaru = parseInt(updatedSls.total_submit || 0) - parseInt(updatedSls.total_approve || 0);
+          if (sisaBaru <= 0) {
+            setSelectedSLS(prev => ({ ...prev, [ppl_id]: null }));
+          } else {
+            setSelectedSLS(prev => ({ ...prev, [ppl_id]: updatedSls }));
+          }
+        }
+      }
+
+      if (updatedInputs) {
+        setInputs(prev => ({ ...prev, [ppl_id]: updatedInputs }));
+      }
+
     } catch (err) {
       setPesan(prev => ({ ...prev, [ppl_id]: { text: err.response?.data?.message || 'Gagal simpan', type: 'error' } }));
     } finally {
       setSubmitLoading(prev => ({ ...prev, [ppl_id]: false }));
     }
+  };
+
+  // Cek tanggal approve PML: hanya baris dengan approve > 0, pakai slice agar tidak timezone-shift
+  const cekTanggalTerisi = (pplInputs, dateString) => {
+    if (!dateString) return false;
+    return pplInputs.some(inp => {
+      if (!inp.tanggal) return false;
+      if (parseInt(inp.approve || 0) <= 0) return false;
+      return inp.tanggal.slice(0, 10) === dateString;
+    });
   };
 
   return (
@@ -151,29 +199,29 @@ const DashboardPML = () => {
         <div style={styles.cardTitle}>PPL yang Dibawahi</div>
 
         {loading ? (
-          <p style={{ textAlign: 'center', color: '#9AA5B4', fontSize: 13, padding: '16px 0' }}>
-            Memuat...
-          </p>
+          <p style={{ textAlign: 'center', color: '#9AA5B4', fontSize: 13, padding: '16px 0' }}>Memuat...</p>
         ) : pplList.length === 0 ? (
-          <p style={{ textAlign: 'center', color: '#9AA5B4', fontSize: 13, padding: '16px 0' }}>
-            Belum ada PPL.
-          </p>
+          <p style={{ textAlign: 'center', color: '#9AA5B4', fontSize: 13, padding: '16px 0' }}>Belum ada PPL.</p>
         ) : (
           pplList.map((ppl) => {
-            const isOpen    = expandedPPL === ppl.id;
-            const pplInputs = inputs[ppl.id] || [];
+            const isOpen      = expandedPPL === ppl.id;
+            const pplInputs   = inputs[ppl.id] || [];
             const wilayahList = wilayahMap[ppl.id] || [];
 
             const totalLapangan = pplInputs.reduce((a, b) => a + parseInt(b.ke_lapangan || 0), 0);
             const totalSubmit   = pplInputs.reduce((a, b) => a + parseInt(b.submit || 0), 0);
             const totalApprove  = pplInputs.reduce((a, b) => a + parseInt(b.approve || 0), 0);
 
-            const slsSelected  = selectedSLS[ppl.id];
-            const isSlsOpen    = slsOpen[ppl.id];
-            const isSubmitting = submitLoading[ppl.id];
-            const pesanItem    = pesan[ppl.id];
+            const slsSelected   = selectedSLS[ppl.id];
+            const isSlsOpen     = slsOpen[ppl.id];
+            const isSubmitting  = submitLoading[ppl.id];
+            const pesanItem     = pesan[ppl.id];
+            const isRiwayatOpen = riwayatOpen[ppl.id];
+            const tglTerpilih   = tanggalApprove[ppl.id] || getToday();
 
-            // SLS yang masih bisa di-approve (sisa > 0)
+            // Warna hijau jika tanggal yang dipilih sudah ada approve
+            const isHariIniHijau = cekTanggalTerisi(pplInputs, tglTerpilih);
+
             const slsBisaApprove = wilayahList.filter(
               (w) => (parseInt(w.total_submit || 0) - parseInt(w.total_approve || 0)) > 0
             );
@@ -186,7 +234,7 @@ const DashboardPML = () => {
                   style={{
                     ...styles.pplItem,
                     backgroundColor: isOpen ? '#EEF5FF' : '#F7F8FA',
-                    borderColor: isOpen ? '#C7DEFF' : '#EBEEf2',
+                    borderColor:     isOpen ? '#C7DEFF' : '#EBEEf2',
                   }}
                 >
                   <div style={styles.pplAvatar}>{ppl.nama.charAt(0)}</div>
@@ -208,16 +256,14 @@ const DashboardPML = () => {
                       <div style={styles.pplStatLabel}>Approve</div>
                     </div>
                   </div>
-                  <span style={{ fontSize: 10, color: '#9AA5B4', marginLeft: 6 }}>
-                    {isOpen ? '▲' : '▼'}
-                  </span>
+                  <span style={{ fontSize: 10, color: '#9AA5B4', marginLeft: 6 }}>{isOpen ? '▲' : '▼'}</span>
                 </div>
 
                 {/* Panel accordion */}
                 {isOpen && (
                   <div style={styles.accordionBody}>
 
-                    {/* ── Ringkasan ── */}
+                    {/* Ringkasan */}
                     <div style={styles.section}>
                       <div style={styles.sectionTitle}>Ringkasan</div>
                       <div style={styles.summaryRow}>
@@ -234,11 +280,10 @@ const DashboardPML = () => {
                       </div>
                     </div>
 
-                    {/* ── Form Approve ── */}
+                    {/* Form Approve */}
                     <div style={{ ...styles.section, borderTop: '1px solid #EEF5FF', paddingTop: 14 }}>
                       <div style={styles.sectionTitle}>Approve Data</div>
 
-                      {/* Pesan sukses / error */}
                       {pesanItem?.text && (
                         <div style={{
                           ...styles.pesan,
@@ -252,12 +297,13 @@ const DashboardPML = () => {
 
                       {loadingMap[ppl.id] ? (
                         <p style={{ fontSize: 12, color: '#9AA5B4', textAlign: 'center' }}>Memuat SLS...</p>
-                      ) : slsBisaApprove.length === 0 ? (
+                      ) : slsBisaApprove.length === 0 && !slsSelected ? (
                         <p style={{ fontSize: 12, color: '#9AA5B4', textAlign: 'center', padding: '8px 0' }}>
                           Tidak ada SLS yang bisa di-approve saat ini.
                         </p>
                       ) : (
                         <form onSubmit={(e) => handleApprove(e, ppl.id)}>
+
                           {/* Pilih SLS */}
                           <div style={styles.field}>
                             <label style={styles.label}>Pilih SLS</label>
@@ -271,11 +317,7 @@ const DashboardPML = () => {
                                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                 }}
                               >
-                                <span>
-                                  {slsSelected
-                                    ? `${slsSelected.kode_sls} — ${slsSelected.kelurahan}`
-                                    : 'Pilih kode SLS...'}
-                                </span>
+                                <span>{slsSelected ? `${slsSelected.kode_sls} — ${slsSelected.kelurahan}` : 'Pilih kode SLS...'}</span>
                                 <span style={{ fontSize: 9 }}>{isSlsOpen ? '▲' : '▼'}</span>
                               </div>
 
@@ -294,10 +336,7 @@ const DashboardPML = () => {
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                           <div>
                                             <div style={styles.slsKode}>{w.kode_sls}</div>
-                                            <div style={styles.slsNama}>
-                                              {w.kelurahan}
-                                              <span style={styles.slsKec}>, {w.kecamatan}</span>
-                                            </div>
+                                            <div style={styles.slsNama}>{w.kelurahan}<span style={styles.slsKec}>, {w.kecamatan}</span></div>
                                           </div>
                                           <span style={styles.badgeProgres}>Sisa: {sisa}</span>
                                         </div>
@@ -315,16 +354,16 @@ const DashboardPML = () => {
                               )}
                             </div>
 
-                            {/* Preview SLS terpilih */}
+                            {/* Detail Preview SLS */}
                             {slsSelected && (
                               <div style={styles.slsPreview}>
                                 {[
-                                  ['Kode SLS', slsSelected.kode_sls],
+                                  ['Kode SLS',  slsSelected.kode_sls],
                                   ['Kelurahan', slsSelected.kelurahan],
                                   ['Kecamatan', slsSelected.kecamatan],
-                                  ['Submit',  slsSelected.total_submit],
-                                  ['Approve', slsSelected.total_approve],
-                                  ['Sisa', parseInt(slsSelected.total_submit || 0) - parseInt(slsSelected.total_approve || 0)],
+                                  ['Submit',    slsSelected.total_submit],
+                                  ['Approve',   slsSelected.total_approve],
+                                  ['Sisa',      parseInt(slsSelected.total_submit || 0) - parseInt(slsSelected.total_approve || 0)],
                                 ].map(([k, v]) => (
                                   <div key={k} style={styles.slsPreviewRow}>
                                     <span style={styles.slsPreviewKey}>{k}</span>
@@ -335,30 +374,39 @@ const DashboardPML = () => {
                             )}
                           </div>
 
-                          {/* Jumlah approve */}
+                          {/* Tanggal — pakai input date biasa seperti DashboardPPL */}
+                          <div style={styles.field}>
+                            <label style={styles.label}>Tanggal</label>
+                            <input
+                              type="date"
+                              max={getToday()}
+                              value={tglTerpilih}
+                              onChange={(e) => setTanggalApprove(prev => ({ ...prev, [ppl.id]: e.target.value }))}
+                              style={{
+                                ...styles.input,
+                                backgroundColor: isHariIniHijau ? '#DCFCE7' : '#F7F8FA',
+                                color:           isHariIniHijau ? '#15803D' : '#2D3748',
+                                borderColor:     isHariIniHijau ? '#BBF7D0' : '#EBEEf2',
+                                fontWeight:      isHariIniHijau ? '600'     : '400',
+                              }}
+                            />
+                            {isHariIniHijau && (
+                              <div style={{ fontSize: 11, color: '#15803D', marginTop: 4, fontWeight: 500 }}>
+                                ✅ Sudah ada approve pada tanggal ini
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Jumlah Approve */}
                           <div style={styles.field}>
                             <label style={styles.label}>Jumlah Approve</label>
                             <input
                               type="number"
                               min="1"
-                              max={slsSelected
-                                ? parseInt(slsSelected.total_submit || 0) - parseInt(slsSelected.total_approve || 0)
-                                : undefined}
+                              max={slsSelected ? parseInt(slsSelected.total_submit || 0) - parseInt(slsSelected.total_approve || 0) : undefined}
                               placeholder="Masukkan jumlah..."
                               value={jumlahApprove[ppl.id] || ''}
                               onChange={(e) => setJumlahApprove(prev => ({ ...prev, [ppl.id]: e.target.value }))}
-                              style={styles.input}
-                            />
-                          </div>
-
-                          {/* Catatan */}
-                          <div style={styles.field}>
-                            <label style={styles.label}>Catatan <span style={{ color: '#B0BAC6', fontWeight: 400 }}>(opsional)</span></label>
-                            <input
-                              type="text"
-                              placeholder="Tambahkan catatan..."
-                              value={catatan[ppl.id] || ''}
-                              onChange={(e) => setCatatan(prev => ({ ...prev, [ppl.id]: e.target.value }))}
                               style={styles.input}
                             />
                           </div>
@@ -374,37 +422,50 @@ const DashboardPML = () => {
                       )}
                     </div>
 
-                    {/* ── Riwayat Input ── */}
+                    {/* Riwayat Input */}
                     {pplInputs.length > 0 && (
-                      <div style={{ ...styles.section, borderTop: '1px solid #EEF5FF', paddingTop: 14 }}>
-                        <div style={styles.sectionTitle}>Riwayat Input ({pplInputs.length})</div>
-                        <div style={{ maxHeight: 220, overflowY: 'auto' }}>
-                          {pplInputs.slice(0, 20).map((inp) => (
-                            <div key={inp.id} style={styles.inputItem}>
-                              <div style={styles.inputLeft}>
-                                <div style={styles.inputWilayah}>{inp.kelurahan}, {inp.kecamatan}</div>
-                                <div style={styles.inputDate}>
-                                  {new Date(inp.created_at).toLocaleDateString('id-ID', {
-                                    day: 'numeric', month: 'short', year: 'numeric',
-                                  })}
-                                </div>
-                                {inp.catatan && <div style={styles.inputCatatan}>"{inp.catatan}"</div>}
-                              </div>
-                              <div style={styles.inputStats}>
-                                {[
-                                  { label: 'Lap',  val: inp.ke_lapangan, color: '#003366' },
-                                  { label: 'Sub',  val: inp.submit,      color: '#E8702A' },
-                                  { label: 'Apr',  val: inp.approve,     color: '#1D9E75' },
-                                ].map(({ label, val, color }) => (
-                                  <div key={label} style={styles.inputStat}>
-                                    <div style={{ ...styles.inputStatNum, color }}>{val}</div>
-                                    <div style={styles.inputStatLabel}>{label}</div>
+                      <div style={{ ...styles.section, borderTop: '1px solid #EEF5FF', paddingTop: 10 }}>
+                        <button
+                          type="button"
+                          onClick={() => setRiwayatOpen(prev => ({ ...prev, [ppl.id]: !prev[ppl.id] }))}
+                          style={{
+                            ...styles.toggleRiwayatBtn,
+                            backgroundColor: isRiwayatOpen ? '#003366' : '#F0F5FF',
+                            color:           isRiwayatOpen ? 'white'   : '#003366',
+                            borderColor:     isRiwayatOpen ? '#002244' : '#D0E1FD',
+                          }}
+                        >
+                          <span>Riwayat Input ({pplInputs.length})</span>
+                          <span>{isRiwayatOpen ? '▲ Sembunyikan' : '▼ Tampilkan'}</span>
+                        </button>
+
+                        {isRiwayatOpen && (
+                          <div style={{ maxHeight: 220, overflowY: 'auto', marginTop: 10 }}>
+                            {pplInputs.slice(0, 20).map((inp) => (
+                              <div key={inp.id} style={styles.inputItem}>
+                                <div style={styles.inputLeft}>
+                                  <div style={styles.inputWilayah}>{inp.kelurahan}, {inp.kecamatan}</div>
+                                  <div style={styles.inputDate}>
+                                    {new Date(inp.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                                   </div>
-                                ))}
+                                  {inp.catatan && <div style={styles.inputCatatan}>"{inp.catatan}"</div>}
+                                </div>
+                                <div style={styles.inputStats}>
+                                  {[
+                                    { label: 'Lap', val: inp.ke_lapangan, color: '#003366' },
+                                    { label: 'Sub', val: inp.submit,      color: '#E8702A' },
+                                    { label: 'Apr', val: inp.approve,     color: '#1D9E75' },
+                                  ].map(({ label, val, color }) => (
+                                    <div key={label} style={styles.inputStat}>
+                                      <div style={{ ...styles.inputStatNum, color }}>{val}</div>
+                                      <div style={styles.inputStatLabel}>{label}</div>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -420,7 +481,7 @@ const DashboardPML = () => {
 };
 
 const styles = {
-  container:  { maxWidth: 480, margin: '0 auto', padding: '1rem', backgroundColor: '#F0F2F5', minHeight: '100vh' },
+  container:  { width: '100%', maxWidth: 480, margin: '0 auto', padding: '1rem', backgroundColor: '#F0F2F5', minHeight: '100vh', boxSizing: 'border-box' },
   header:     { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#003366', padding: '14px 16px', borderRadius: 14, marginBottom: 14 },
   headerLeft: { display: 'flex', alignItems: 'center', gap: 10 },
   avatar:     { width: 36, height: 36, borderRadius: '50%', backgroundColor: '#E8702A', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 500, fontSize: 15 },
@@ -428,20 +489,20 @@ const styles = {
   headerRole: { color: 'rgba(255,255,255,0.5)', fontSize: 11, marginTop: 2 },
   logoutBtn:  { backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)', padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12 },
 
-  card:       { backgroundColor: 'white', borderRadius: 14, padding: '16px', marginBottom: 14, border: '1px solid #EBEEf2', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' },
-  cardTitle:  { fontSize: 11, fontWeight: 500, color: '#9AA5B4', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid #F0F2F5' },
+  card:      { backgroundColor: 'white', borderRadius: 14, padding: '16px', marginBottom: 14, border: '1px solid #EBEEf2' },
+  cardTitle: { fontSize: 11, fontWeight: 500, color: '#9AA5B4', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid #F0F2F5' },
 
-  pplItem:    { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, border: '1px solid', cursor: 'pointer', transition: 'all 0.15s', WebkitTapHighlightColor: 'transparent' },
-  pplAvatar:  { width: 34, height: 34, borderRadius: '50%', backgroundColor: '#003366', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 500, fontSize: 14, flexShrink: 0 },
-  pplInfo:    { flex: 1 },
-  pplName:    { fontSize: 13, fontWeight: 500, color: '#2D3748' },
-  pplemail:   { fontSize: 11, color: '#9AA5B4', marginTop: 1 },
-  pplStats:   { display: 'flex', gap: 12 },
-  pplStat:    { textAlign: 'center' },
-  pplStatNum: { fontSize: 15, fontWeight: 500, lineHeight: 1 },
+  pplItem:     { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, border: '1px solid', cursor: 'pointer', transition: 'all 0.15s', WebkitTapHighlightColor: 'transparent', position: 'relative', zIndex: 1 },
+  pplAvatar:   { width: 34, height: 34, borderRadius: '50%', backgroundColor: '#003366', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 500, fontSize: 14, flexShrink: 0 },
+  pplInfo:     { flex: 1 },
+  pplName:     { fontSize: 13, fontWeight: 500, color: '#2D3748' },
+  pplemail:    { fontSize: 11, color: '#9AA5B4', marginTop: 1 },
+  pplStats:    { display: 'flex', gap: 12 },
+  pplStat:     { textAlign: 'center' },
+  pplStatNum:  { fontSize: 15, fontWeight: 500, lineHeight: 1 },
   pplStatLabel:{ fontSize: 9, color: '#9AA5B4', textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 2 },
 
-  accordionBody: { border: '1px solid #EBEEf2', borderTop: 'none', borderBottomLeftRadius: 10, borderBottomRightRadius: 10, backgroundColor: '#FAFBFF', overflow: 'hidden' },
+  accordionBody: { border: '1px solid #EBEEf2', borderTop: 'none', borderBottomLeftRadius: 10, borderBottomRightRadius: 10, backgroundColor: '#FAFBFF' },
   section:       { padding: '14px 14px' },
   sectionTitle:  { fontSize: 11, fontWeight: 600, color: '#9AA5B4', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 },
 
@@ -453,10 +514,12 @@ const styles = {
   pesan:  { padding: '9px 12px', borderRadius: 8, marginBottom: 12, fontSize: 12, fontWeight: 500 },
   field:  { marginBottom: 10 },
   label:  { display: 'block', fontSize: 12, fontWeight: 500, color: '#4A5568', marginBottom: 4 },
-  input:  { width: '100%', padding: '9px 12px', border: '1px solid #EBEEf2', borderRadius: 8, fontSize: 13, color: '#2D3748', background: 'white', outline: 'none', boxSizing: 'border-box' },
-  submitBtn: { width: '100%', padding: '11px', color: 'white', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 500, cursor: 'pointer', marginTop: 2, backgroundColor: '#1D9E75' },
+  input:  { width: '100%', padding: '9px 12px', border: '1px solid #EBEEf2', borderRadius: 8, fontSize: 13, color: '#2D3748', background: '#F7F8FA', outline: 'none', boxSizing: 'border-box', transition: 'all 0.2s' },
+  submitBtn: { width: '100%', padding: '11px', color: 'white', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 500, cursor: 'pointer', marginTop: 14, backgroundColor: '#1D9E75' },
 
-  slsDropdown: { position: 'absolute', top: 'calc(100% + 3px)', left: 0, right: 0, zIndex: 99, border: '1px solid #EBEEf2', borderRadius: 10, overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', backgroundColor: 'white', maxHeight: 220, overflowY: 'auto' },
+  toggleRiwayatBtn: { width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', border: '1px solid', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', outline: 'none' },
+
+  slsDropdown: { position: 'absolute', top: 'calc(100% + 3px)', left: 0, right: 0, zIndex: 99, border: '1px solid #EBEEf2', borderRadius: 10, overflow: 'hidden', backgroundColor: 'white', maxHeight: 220, overflowY: 'auto' },
   slsOption:   { padding: '9px 12px', borderBottom: '1px solid #F7F8FA', background: 'white' },
   slsKode:     { fontSize: 10, fontWeight: 600, color: '#9AA5B4', letterSpacing: '0.08em', textTransform: 'uppercase' },
   slsNama:     { fontSize: 12, fontWeight: 500, color: '#2D3748' },
@@ -464,10 +527,11 @@ const styles = {
   badgeProgres:{ fontSize: 10, fontWeight: 500, color: '#9AA5B4' },
   progressWrap:{ marginTop: 5, height: 3, backgroundColor: '#F0F2F5', borderRadius: 99, overflow: 'hidden' },
   progressBar: { height: '100%', borderRadius: 99, transition: 'width 0.3s' },
-  slsPreview:     { marginTop: 8, padding: '9px 12px', backgroundColor: '#F7F8FA', borderRadius: 8, border: '1px solid #EBEEf2' },
-  slsPreviewRow:  { display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 5, marginBottom: 5, borderBottom: '1px solid #EEF0F3' },
-  slsPreviewKey:  { fontSize: 11, color: '#9AA5B4' },
-  slsPreviewVal:  { fontSize: 12, fontWeight: 500, color: '#2D3748' },
+
+  slsPreview:    { marginTop: 8, padding: '9px 12px', backgroundColor: '#F7F8FA', borderRadius: 8, border: '1px solid #EBEEf2' },
+  slsPreviewRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 5, marginBottom: 5, borderBottom: '1px solid #EEF0F3' },
+  slsPreviewKey: { fontSize: 11, color: '#9AA5B4' },
+  slsPreviewVal: { fontSize: 12, fontWeight: 500, color: '#2D3748' },
 
   inputItem:     { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #F0F2F5' },
   inputLeft:     { flex: 1 },

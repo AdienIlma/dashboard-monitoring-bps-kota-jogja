@@ -19,6 +19,7 @@ const DashboardPPL = () => {
   const [wilayah, setWilayah] = useState([]);
   const [inputs, setInputs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [riwayatOpen, setRiwayatOpen] = useState(false); // ← tambah
 
   const [sesi, setSesi] = useState({
     tanggal: getToday(),
@@ -240,7 +241,7 @@ const DashboardPPL = () => {
         {MENU.map((m) => (
           <button
             key={m.key}
-            onClick={() => { setActiveMenu(m.key); setPesan({ text: "", type: "" }); }}
+            onClick={() => { setActiveMenu(m.key); setPesan({ text: "", type: "" }); setRiwayatOpen(false); }}
             style={{
               ...styles.menuBtn,
               backgroundColor: activeMenu === m.key ? m.color : "white",
@@ -402,38 +403,53 @@ const DashboardPPL = () => {
         </form>
       </div>
 
-      {/* Riwayat */}
+      {/* Riwayat — pakai toggle seperti DashboardPML */}
       <div style={styles.card}>
-        <div style={styles.cardTitle}>
-          Riwayat — {MENU.find((m) => m.key === activeMenu)?.label}
-        </div>
-        {loading ? (
-          <p style={{ textAlign: "center", color: "#9AA5B4", fontSize: 13 }}>Memuat...</p>
-        ) : filteredInputs.length === 0 ? (
-          <p style={{ textAlign: "center", color: "#9AA5B4", fontSize: 13, padding: "20px 0" }}>
-            Belum ada data {MENU.find((m) => m.key === activeMenu)?.label.toLowerCase()}.
-          </p>
-        ) : (
-          filteredInputs.map((i) => (
-            <div key={i.id} style={styles.inputItem}>
-              <div style={styles.inputLeft}>
-                <div style={styles.inputKodeSLS}>{i.kode_sls}</div>
-                <div style={styles.inputWilayah}>{i.kelurahan}, {i.kecamatan}</div>
-                <div style={styles.inputDate}>
-                  {new Date(i.tanggal).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
-                  {i.catatan && <span style={{ color: "#B0BAC6" }}> · {i.catatan}</span>}
+        <button
+          type="button"
+          onClick={() => setRiwayatOpen((v) => !v)}
+          style={{
+            ...styles.toggleRiwayatBtn,
+            backgroundColor: riwayatOpen ? activeColor : "#F0F5FF",
+            color:           riwayatOpen ? "white"     : activeColor,
+            borderColor:     riwayatOpen ? activeColor : "#D0E1FD",
+          }}
+        >
+          <span>Riwayat — {MENU.find((m) => m.key === activeMenu)?.label} ({filteredInputs.length})</span>
+          <span>{riwayatOpen ? "▲ Sembunyikan" : "▼ Tampilkan"}</span>
+        </button>
+
+        {riwayatOpen && (
+          <div style={{ marginTop: 12 }}>
+            {loading ? (
+              <p style={{ textAlign: "center", color: "#9AA5B4", fontSize: 13 }}>Memuat...</p>
+            ) : filteredInputs.length === 0 ? (
+              <p style={{ textAlign: "center", color: "#9AA5B4", fontSize: 13, padding: "20px 0" }}>
+                Belum ada data {MENU.find((m) => m.key === activeMenu)?.label.toLowerCase()}.
+              </p>
+            ) : (
+              filteredInputs.map((i) => (
+                <div key={i.id} style={styles.inputItem}>
+                  <div style={styles.inputLeft}>
+                    <div style={styles.inputKodeSLS}>{i.kode_sls}</div>
+                    <div style={styles.inputWilayah}>{i.kelurahan}, {i.kecamatan}</div>
+                    <div style={styles.inputDate}>
+                      {new Date(i.tanggal).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
+                      {i.catatan && <span style={{ color: "#B0BAC6" }}> · {i.catatan}</span>}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 22, fontWeight: 500, color: activeColor }}>
+                      {activeMenu === "lapangan" ? i.ke_lapangan : i.submit}
+                    </div>
+                    <div style={{ fontSize: 9, color: "#9AA5B4", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      {MENU.find((m) => m.key === activeMenu)?.label}
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 22, fontWeight: 500, color: activeColor }}>
-                  {activeMenu === "lapangan" ? i.ke_lapangan : i.submit}
-                </div>
-                <div style={{ fontSize: 9, color: "#9AA5B4", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  {MENU.find((m) => m.key === activeMenu)?.label}
-                </div>
-              </div>
-            </div>
-          ))
+              ))
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -461,6 +477,7 @@ const styles = {
   label: { display: "block", fontSize: 12, fontWeight: 500, color: "#4A5568", marginBottom: 5 },
   input: { width: "100%", padding: "9px 12px", border: "1px solid #EBEEf2", borderRadius: 8, fontSize: 13, color: "#2D3748", background: "#F7F8FA", outline: "none", boxSizing: "border-box" },
   submitBtn: { width: "100%", padding: "12px", color: "white", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 500, cursor: "pointer", marginTop: 4 },
+  toggleRiwayatBtn: { width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", border: "1px solid", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.2s", outline: "none" },
   slsDropdown: { marginTop: 4, border: "1px solid #EBEEf2", borderRadius: 10, overflow: "hidden", boxShadow: "0 4px 16px rgba(0,0,0,0.08)", backgroundColor: "white", maxHeight: 260, overflowY: "auto" },
   slsOption: { padding: "10px 14px", borderBottom: "1px solid #F7F8FA", transition: "background 0.1s" },
   slsKode: { fontSize: 10, fontWeight: 600, color: "#9AA5B4", letterSpacing: "0.08em", textTransform: "uppercase" },

@@ -488,7 +488,7 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 5 * 1000);
+    const interval = setInterval(fetchData, 60 * 1000);
     return () => clearInterval(interval);
   }, [fetchData]);
 

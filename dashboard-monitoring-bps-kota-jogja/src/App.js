@@ -29,121 +29,126 @@ import {
 import axios from "axios";
 
 // ─── Halaman Login ───────────────────────────────────────────
-// ─── Halaman Login ───────────────────────────────────────────
 function LoginPage() {
   const { login } = useAuth();
-
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     setLoading(true);
     setError("");
-
     try {
       const res = await axios.post(
-        "http://localhost:5000/api/auth/login",
-        {
-          username,
-          password,
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
+        "https://api.semaki.my.id/api/auth/login",
+        { username, password },
+        { headers: { "Content-Type": "application/json" } }
       );
-
       login(res.data);
     } catch (err) {
       console.error("LOGIN ERROR:", err);
-
-      setError(
-        err.response?.data?.message || "Login gagal"
-      );
+      setError(err.response?.data?.message || "Login gagal");
     } finally {
       setLoading(false);
     }
   };
 
+  const [showPassword, setShowPassword] = useState(false);
+
   return (
     <div style={loginStyles.container}>
       <div style={loginStyles.card}>
+        {/* Logo BPS */}
         <img
-  src="/logo-sensus.png"
-  alt="Logo BPS"
-  style={{
-    maxWidth: "110px",
-    maxHeight: "110px",
-    width: "auto",
-    height: "auto",
-    display: "block",
-    margin: "0 auto 16px auto",
-  }}
-/>
+          src="/logo-sensus.png"
+          alt="Logo BPS"
+          style={{
+            width: 64,
+            height: 64,
+            objectFit: "contain",
+            display: "block",
+            margin: "0 auto 1.25rem auto",
+          }}
+        />
 
-        <h2 style={loginStyles.title}>
-          BPS Kota Yogyakarta
-        </h2>
+        {/* Brand Name */}
+        <h1 style={loginStyles.brandName}>SEMAKI</h1>
+        <p style={loginStyles.brandTagline}>Sensus Ekonomi Manajemen Aktivitas dan Kinerja</p>
 
-        <p style={loginStyles.subtitle}>
-          Sistem Monitoring Pendataan
-        </p>
+        {/* Divider */}
+        <div style={loginStyles.divider} />
 
-        {error && (
-          <div style={loginStyles.error}>
-            {error}
-          </div>
-        )}
+        {error && <div style={loginStyles.error}>{error}</div>}
 
         <form onSubmit={handleSubmit}>
           <div style={loginStyles.field}>
-            <label style={loginStyles.label}>
-              Username
-            </label>
-
+            <label style={loginStyles.label}>Email</label>
             <input
               style={loginStyles.input}
-              type="text"
+              type="email"
               value={username}
-              onChange={(e) =>
-                setUsername(e.target.value)
-              }
-              placeholder="Masukkan username"
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Masukkan Email"
               required
             />
           </div>
-
           <div style={loginStyles.field}>
-            <label style={loginStyles.label}>
-              Password
-            </label>
-
-            <input
-              style={loginStyles.input}
-              type="password"
-              value={password}
-              onChange={(e) =>
-                setPassword(e.target.value)
-              }
-              placeholder="Masukkan password"
-              required
-            />
-          </div>
-
-          <button
-            style={loginStyles.button}
-            type="submit"
-            disabled={loading}
-          >
+  <label style={loginStyles.label}>Password</label>
+  <div style={{ position: "relative" }}>
+    <input
+      style={{ ...loginStyles.input, paddingRight: "42px" }}
+      type={showPassword ? "text" : "password"}
+      value={password}
+      onChange={(e) => setPassword(e.target.value)}
+      placeholder="Masukkan password"
+      required
+    />
+    <button
+      type="button"
+      onClick={() => setShowPassword((prev) => !prev)}
+      style={{
+        position: "absolute",
+        right: "12px",
+        top: "50%",
+        transform: "translateY(-50%)",
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        padding: 0,
+        display: "flex",
+        alignItems: "center",
+        color: "#6b88b5",
+      }}
+      aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+    >
+      {showPassword ? (
+        // Ikon mata tertutup
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+          <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+          <line x1="1" y1="1" x2="23" y2="23"/>
+        </svg>
+      ) : (
+        // Ikon mata terbuka
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+      )}
+    </button>
+  </div>
+</div>
+          <button style={loginStyles.button} type="submit" disabled={loading}>
             {loading ? "Memproses..." : "Masuk"}
           </button>
         </form>
+        
+
+        <p style={loginStyles.footer}>
+          Badan Pusat Statistik · Kota Yogyakarta
+        </p>
       </div>
     </div>
   );
@@ -155,41 +160,42 @@ const loginStyles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0a1628",
     backgroundImage:
-      "radial-gradient(ellipse at top, #1e3a5f 0%, #0f172a 70%)",
+      "radial-gradient(ellipse 80% 60% at 50% 0%, #1a3a6e 0%, #0a1628 65%)",
   },
-
   card: {
-    backgroundColor: "white",
-    padding: "2.5rem",
-    borderRadius: "16px",
-    boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+    backgroundColor: "rgba(255,255,255,0.97)",
+    padding: "2.5rem 2.25rem",
+    borderRadius: "20px",
+    boxShadow: "0 24px 64px rgba(0,0,0,0.45)",
     width: "100%",
-    maxWidth: "380px",
+    maxWidth: "360px",
+    border: "1px solid rgba(255,255,255,0.15)",
   },
-
-  logo: {
+  brandName: {
     textAlign: "center",
-    fontSize: "2.5rem",
-    marginBottom: "0.5rem",
-  },
-
-  title: {
-    textAlign: "center",
-    color: "#1e3a5f",
-    marginBottom: "4px",
-    fontSize: "1.4rem",
+    color: "#0a2a5e",
+    fontSize: "2rem",
     fontWeight: "800",
+    letterSpacing: "0.1em",
+    margin: "0 0 4px",
+    lineHeight: 1,
   },
-
-  subtitle: {
+  brandTagline: {
     textAlign: "center",
-    color: "#64748b",
-    marginBottom: "1.5rem",
-    fontSize: "0.85rem",
+    color: "#6b88b5",
+    fontSize: "0.72rem",
+    fontWeight: "600",
+    letterSpacing: "0.18em",
+    textTransform: "uppercase",
+    margin: "0 0 1.5rem",
   },
-
+  divider: {
+    height: 1,
+    background: "linear-gradient(90deg, transparent, #d0dff0, transparent)",
+    marginBottom: "1.5rem",
+  },
   error: {
     backgroundColor: "#fee2e2",
     color: "#dc2626",
@@ -199,40 +205,48 @@ const loginStyles = {
     fontSize: "0.85rem",
     textAlign: "center",
   },
-
   field: {
     marginBottom: "1rem",
   },
-
   label: {
     display: "block",
     marginBottom: "6px",
-    color: "#374151",
-    fontWeight: "600",
-    fontSize: "0.875rem",
+    color: "#4a6080",
+    fontWeight: "700",
+    fontSize: "0.72rem",
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
   },
-
   input: {
     width: "100%",
-    padding: "10px 12px",
-    border: "1px solid #d1d5db",
-    borderRadius: "8px",
-    fontSize: "0.95rem",
+    padding: "11px 14px",
+    border: "1.5px solid #dde6f0",
+    borderRadius: "10px",
+    fontSize: "0.9rem",
     boxSizing: "border-box",
     outline: "none",
+    backgroundColor: "#f7fafd",
+    color: "#1a2840",
   },
-
   button: {
     width: "100%",
-    padding: "12px",
-    backgroundColor: "#1e3a5f",
+    padding: "13px",
+    backgroundColor: "#0a2a5e",
     color: "white",
     border: "none",
-    borderRadius: "8px",
-    fontSize: "1rem",
+    borderRadius: "10px",
+    fontSize: "0.9rem",
     fontWeight: "700",
     cursor: "pointer",
     marginTop: "0.5rem",
+    letterSpacing: "0.04em",
+  },
+  footer: {
+    textAlign: "center",
+    fontSize: "0.7rem",
+    color: "#a0b4cc",
+    marginTop: "1.25rem",
+    marginBottom: 0,
   },
 };
 
@@ -255,106 +269,89 @@ function AdminDashboard() {
 
   const stableLogout = useCallback(() => logout(), [logout]);
 
-  // App.js — ganti useEffect fetchPetugasHarian
   useEffect(() => {
-  const fetchHarian = async () => {
-    try {
-      const [harianKecamatan, harianPetugas, detailTotal] = await Promise.all([
-        getKecamatanHarianData(tanggalHarian),
-        getPetugasDetailHarian(tanggalHarian),
-        getPetugasDetail(),
-      ]);
-
-      setKecamatanHarianData(harianKecamatan);
-      setPetugasHarianData(harianPetugas);
-      setPetugasDetailData(detailTotal);
-    } catch (err) {
-      console.error("Gagal fetch harian:", err);
-    }
-  };
-
-  fetchHarian();
-
-  const interval = setInterval(fetchHarian, 5000);
-
-  return () => clearInterval(interval);
+    const fetchHarian = async () => {
+      try {
+        const [harianKecamatan, harianPetugas, detailTotal] = await Promise.all([
+          getKecamatanHarianData(tanggalHarian),
+          getPetugasDetailHarian(tanggalHarian),
+          getPetugasDetail(),
+        ]);
+        setKecamatanHarianData(harianKecamatan);
+        setPetugasHarianData(harianPetugas);
+        setPetugasDetailData(detailTotal);
+      } catch (err) {
+        console.error("Gagal fetch harian:", err);
+      }
+    };
+    fetchHarian();
+    const interval = setInterval(fetchHarian, 60000);
+    return () => clearInterval(interval);
   }, [tanggalHarian]);
 
   useEffect(() => {
-  const fetchData = async () => {
-    try {
-      const [petugas, progress, kecamatan, progress15, wilayah] =
-        await Promise.all([
-          getPetugasData(),
-          getProgressData(),
-          getKecamatanData(),
-          getProgress15Hari(),
-          getWilayahData(),
-        ]);
-
-      setPetugasData(petugas);
-      setProgressData(progress);
-      setKecamatanData(kecamatan);
-      setProgress15HariData(progress15);
-      setWilayahList(wilayah);
-    } catch (err) {
-      if (err.response?.status === 401) {
-        stableLogout();
-      } else {
-        setError("Gagal memuat data dashboard");
+    const fetchData = async () => {
+      try {
+        const [petugas, progress, kecamatan, progress15, wilayah] =
+          await Promise.all([
+            getPetugasData(),
+            getProgressData(),
+            getKecamatanData(),
+            getProgress15Hari(),
+            getWilayahData(),
+          ]);
+        setPetugasData(petugas);
+        setProgressData(progress);
+        setKecamatanData(kecamatan);
+        setProgress15HariData(progress15);
+        setWilayahList(wilayah);
+      } catch (err) {
+        if (err.response?.status === 401) {
+          stableLogout();
+        } else {
+          setError("Gagal memuat data dashboard");
+        }
       }
-    }
-  };
-
-  fetchData();
-
-  const interval = setInterval(fetchData, 5000);
-
-  return () => clearInterval(interval);
+    };
+    fetchData();
+    const interval = setInterval(fetchData, 60000);
+    return () => clearInterval(interval);
   }, [stableLogout]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <div
-  onMouseEnter={() => setShowNavbar(true)}
-  style={{
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 8,
-    zIndex: 9999,
-  }}
-/>
-      {/* Navbar */}
-<div
-  style={{
-    ...navStyles.nav,
-    transform: showNavbar ? "translateY(0)" : "translateY(-100%)",
-  }}
-  onMouseLeave={() => setShowNavbar(false)}
->
-        <div
-  style={{
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-  }}
->
-  <img
-    src="/logo-sensus.png"
-    alt="Logo"
-    style={{
-      width: 28,
-      height: 28,
-      objectFit: "contain",
-    }}
-  />
+        onMouseEnter={() => setShowNavbar(true)}
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 8,
+          zIndex: 9999,
+        }}
+      />
 
-  <span style={navStyles.title}>
-    Dashboard Monitoring BPS Kota Yogyakarta
-  </span>
-</div>
+      {/* Navbar */}
+      <div
+        style={{
+          ...navStyles.nav,
+          transform: showNavbar ? "translateY(0)" : "translateY(-100%)",
+        }}
+        onMouseLeave={() => setShowNavbar(false)}
+      >
+        {/* Brand di navbar */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <img
+            src="/logo-sensus.png"
+            alt="Logo"
+            style={{ width: 28, height: 28, objectFit: "contain" }}
+          />
+          <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
+            <span style={navStyles.brandName}>SEMAKI</span>
+            <span style={navStyles.brandSub}>Sensus Ekonomi Manajemen Aktivitas dan Kinerja</span>
+          </div>
+        </div>
 
         <div style={navStyles.tabs}>
           {[
@@ -374,6 +371,7 @@ function AdminDashboard() {
             </button>
           ))}
         </div>
+
         <div style={navStyles.right}>
           <span style={navStyles.nama}>👤 {user?.nama}</span>
           <button style={navStyles.logoutBtn} onClick={stableLogout}>
@@ -450,22 +448,28 @@ const navStyles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    background: "rgba(30, 58, 95, 0.96)",
+    background: "rgba(10, 26, 50, 0.97)",
     backdropFilter: "blur(12px)",
     padding: "0 1.5rem",
     color: "white",
     height: 56,
-    boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
     transition: "transform 0.25s ease",
   },
-
-  title: {
+  brandName: {
     fontWeight: "800",
-    fontSize: "0.95rem",
-    whiteSpace: "nowrap",
-    letterSpacing: "0.02em",
+    fontSize: "1rem",
+    letterSpacing: "0.12em",
+    color: "white",
   },
-
+  brandSub: {
+    fontSize: "0.6rem",
+    fontWeight: "600",
+    letterSpacing: "0.14em",
+    color: "rgba(255,255,255,0.5)",
+    textTransform: "uppercase",
+    marginTop: 2,
+  },
   tabs: {
     display: "flex",
     gap: 6,
@@ -473,7 +477,6 @@ const navStyles = {
     padding: 4,
     borderRadius: 10,
   },
-
   tab: {
     padding: "8px 16px",
     border: "none",
@@ -485,19 +488,16 @@ const navStyles = {
     color: "rgba(255,255,255,0.75)",
     transition: "all 0.2s ease",
   },
-
   tabActive: {
     background: "white",
-    color: "#1e3a5f",
+    color: "#0a2a5e",
     boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
   },
-
   right: {
     display: "flex",
     alignItems: "center",
     gap: "0.75rem",
   },
-
   nama: {
     fontSize: "0.85rem",
     opacity: 0.9,
@@ -506,7 +506,6 @@ const navStyles = {
     padding: "6px 10px",
     borderRadius: 8,
   },
-
   logoutBtn: {
     backgroundColor: "#ef4444",
     border: "none",
@@ -516,7 +515,6 @@ const navStyles = {
     cursor: "pointer",
     fontSize: "0.8rem",
     fontWeight: 700,
-    transition: "all 0.2s ease",
   },
 };
 
@@ -565,13 +563,14 @@ function AppRoutes() {
 }
 
 // ─── App Utama ───────────────────────────────────────────────
+// ─── App Utama ───────────────────────────────────────────────
 function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
+    <AuthProvider>
+      <BrowserRouter>
         <AppRoutes />
-      </AuthProvider>
-    </BrowserRouter>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 

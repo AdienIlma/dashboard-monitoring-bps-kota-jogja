@@ -1,20 +1,27 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../services/api';
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => {
-    const token = sessionStorage.getItem('token');
-    const role = sessionStorage.getItem('role');
-    const nama = sessionStorage.getItem('nama');
-    return token ? { token, role, nama } : null;
-  });
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('user');
+      if (saved) {
+        setUser(JSON.parse(saved));
+      }
+    } catch {
+      localStorage.removeItem('user');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const login = (data) => {
-    sessionStorage.setItem('token', data.token);
-    sessionStorage.setItem('role', data.role);
-    sessionStorage.setItem('nama', data.nama);
+    localStorage.setItem('user', JSON.stringify(data));
     setUser(data);
   };
 
@@ -24,12 +31,12 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       console.error('Gagal logout:', err);
     } finally {
-      sessionStorage.removeItem('token');
-      sessionStorage.removeItem('role');
-      sessionStorage.removeItem('nama');
+      localStorage.removeItem('user');
       setUser(null);
     }
   };
+
+  if (loading) return null;
 
   return (
     <AuthContext.Provider value={{ user, login, logout }}>
