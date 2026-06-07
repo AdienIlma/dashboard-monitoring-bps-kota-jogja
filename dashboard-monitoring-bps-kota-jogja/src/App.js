@@ -43,8 +43,9 @@ function LoginPage() {
     try {
       const res = await axios.post(
         "https://api.semaki.my.id/api/auth/login",
+
         { username, password },
-        { headers: { "Content-Type": "application/json" } }
+        { headers: { "Content-Type": "application/json" } },
       );
       login(res.data);
     } catch (err) {
@@ -75,7 +76,9 @@ function LoginPage() {
 
         {/* Brand Name */}
         <h1 style={loginStyles.brandName}>SEMAKI</h1>
-        <p style={loginStyles.brandTagline}>Sensus Ekonomi Manajemen Aktivitas dan Kinerja</p>
+        <p style={loginStyles.brandTagline}>
+          Sensus Ekonomi Manajemen Aktivitas dan Kinerja
+        </p>
 
         {/* Divider */}
         <div style={loginStyles.divider} />
@@ -95,56 +98,75 @@ function LoginPage() {
             />
           </div>
           <div style={loginStyles.field}>
-  <label style={loginStyles.label}>Password</label>
-  <div style={{ position: "relative" }}>
-    <input
-      style={{ ...loginStyles.input, paddingRight: "42px" }}
-      type={showPassword ? "text" : "password"}
-      value={password}
-      onChange={(e) => setPassword(e.target.value)}
-      placeholder="Masukkan password"
-      required
-    />
-    <button
-      type="button"
-      onClick={() => setShowPassword((prev) => !prev)}
-      style={{
-        position: "absolute",
-        right: "12px",
-        top: "50%",
-        transform: "translateY(-50%)",
-        background: "none",
-        border: "none",
-        cursor: "pointer",
-        padding: 0,
-        display: "flex",
-        alignItems: "center",
-        color: "#6b88b5",
-      }}
-      aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
-    >
-      {showPassword ? (
-        // Ikon mata tertutup
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-          <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-          <line x1="1" y1="1" x2="23" y2="23"/>
-        </svg>
-      ) : (
-        // Ikon mata terbuka
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-          <circle cx="12" cy="12" r="3"/>
-        </svg>
-      )}
-    </button>
-  </div>
-</div>
+            <label style={loginStyles.label}>Password</label>
+            <div style={{ position: "relative" }}>
+              <input
+                style={{ ...loginStyles.input, paddingRight: "42px" }}
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Masukkan password"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                style={{
+                  position: "absolute",
+                  right: "12px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  color: "#6b88b5",
+                }}
+                aria-label={
+                  showPassword ? "Sembunyikan password" : "Tampilkan password"
+                }
+              >
+                {showPassword ? (
+                  // Ikon mata tertutup
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                ) : (
+                  // Ikon mata terbuka
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
           <button style={loginStyles.button} type="submit" disabled={loading}>
             {loading ? "Memproses..." : "Masuk"}
           </button>
         </form>
-        
 
         <p style={loginStyles.footer}>
           Badan Pusat Statistik · Kota Yogyakarta
@@ -272,11 +294,13 @@ function AdminDashboard() {
   useEffect(() => {
     const fetchHarian = async () => {
       try {
-        const [harianKecamatan, harianPetugas, detailTotal] = await Promise.all([
-          getKecamatanHarianData(tanggalHarian),
-          getPetugasDetailHarian(tanggalHarian),
-          getPetugasDetail(),
-        ]);
+        const [harianKecamatan, harianPetugas, detailTotal] = await Promise.all(
+          [
+            getKecamatanHarianData(tanggalHarian),
+            getPetugasDetailHarian(tanggalHarian),
+            getPetugasDetail(),
+          ],
+        );
         setKecamatanHarianData(harianKecamatan);
         setPetugasHarianData(harianPetugas);
         setPetugasDetailData(detailTotal);
@@ -347,9 +371,13 @@ function AdminDashboard() {
             alt="Logo"
             style={{ width: 28, height: 28, objectFit: "contain" }}
           />
-          <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
+          <div
+            style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}
+          >
             <span style={navStyles.brandName}>SEMAKI</span>
-            <span style={navStyles.brandSub}>Sensus Ekonomi Manajemen Aktivitas dan Kinerja</span>
+            <span style={navStyles.brandSub}>
+              Sensus Ekonomi Manajemen Aktivitas dan Kinerja
+            </span>
           </div>
         </div>
 

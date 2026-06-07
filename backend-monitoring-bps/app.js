@@ -17,7 +17,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 app.use(require('cors')({
   origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-session-token'],
   credentials: true,
 }));
 

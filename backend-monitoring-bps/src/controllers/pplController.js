@@ -129,4 +129,78 @@ const kirimLokasi = async (req, res) => {
   }
 };
 
-module.exports = { getMyInputs, inputHarian, kirimLokasi };
+// ─── 4. EDIT INPUT HARIAN ──────────────────────────────────────────────────
+
+const editInput = async (req, res) => {
+  const input_id    = parseInt(req.params.input_id);
+  const ke_lapangan = parseInt(req.body.ke_lapangan) || 0;
+  const submit      = parseInt(req.body.submit)      || 0;
+  const catatan     = req.body.catatan ? req.body.catatan.trim().slice(0, 500) : null;
+
+  if (!input_id || isNaN(input_id)) {
+    return res.status(400).json({ message: 'input_id tidak valid' });
+  }
+  if (ke_lapangan === 0 && submit === 0) {
+    return res.status(400).json({ message: 'Minimal satu nilai harus lebih dari 0' });
+  }
+
+  try {
+    // Pastikan baris ini milik PPL yang login, dan belum di-approve
+    const [rows] = await pool.query(
+      `SELECT id, approve FROM input_harian
+       WHERE id = ? AND ppl_id = ? LIMIT 1`,
+      [input_id, req.user.id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Data tidak ditemukan' });
+    }
+    if (parseInt(rows[0].approve) > 0) {
+      return res.status(403).json({ message: 'Data yang sudah di-approve tidak bisa diedit' });
+    }
+
+    await pool.query(
+      `UPDATE input_harian
+       SET ke_lapangan = ?, submit = ?, catatan = ?
+       WHERE id = ?`,
+      [ke_lapangan, submit, catatan, input_id]
+    );
+
+    return res.json({ message: 'Input berhasil diperbarui' });
+  } catch (err) {
+    return handleError(res, err, 'Gagal memperbarui input');
+  }
+};
+
+// ─── 5. HAPUS INPUT HARIAN ─────────────────────────────────────────────────
+
+const hapusInput = async (req, res) => {
+  const input_id = parseInt(req.params.input_id);
+
+  if (!input_id || isNaN(input_id)) {
+    return res.status(400).json({ message: 'input_id tidak valid' });
+  }
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT id, approve FROM input_harian
+       WHERE id = ? AND ppl_id = ? LIMIT 1`,
+      [input_id, req.user.id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Data tidak ditemukan' });
+    }
+    if (parseInt(rows[0].approve) > 0) {
+      return res.status(403).json({ message: 'Data yang sudah di-approve tidak bisa dihapus' });
+    }
+
+    await pool.query('DELETE FROM input_harian WHERE id = ?', [input_id]);
+
+    return res.json({ message: 'Input berhasil dihapus' });
+  } catch (err) {
+    return handleError(res, err, 'Gagal menghapus input');
+  }
+};
+
+module.exports = { getMyInputs, inputHarian, kirimLokasi, editInput, hapusInput };
