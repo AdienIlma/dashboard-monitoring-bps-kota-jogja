@@ -93,19 +93,20 @@ const getWilayahByPPL = async (req, res) => {
       return res.status(403).json({ message: "PPL tidak di bawah anda" });
     }
 
-    const [rows] = await pool.query(
-      `SELECT
-         w.id, w.kode_sls, w.kelurahan, w.kecamatan, w.target,
-         COALESCE(SUM(i.submit),  0) AS total_submit,
-         COALESCE(SUM(i.approve), 0) AS total_approve
-       FROM wilayah w
-       LEFT JOIN user_sls us    ON us.wilayah_id = w.id AND us.user_id = ?
-       LEFT JOIN input_harian i ON i.wilayah_id  = w.id AND i.ppl_id   = ?
-       WHERE w.ppl_id = ? OR us.user_id = ?
-       GROUP BY w.id, w.kode_sls, w.kelurahan, w.kecamatan, w.target
-       ORDER BY w.kelurahan`,
-      [ppl_id, ppl_id, ppl_id, ppl_id],
-    );
+        const [rows] = await pool.query(
+  `SELECT
+     w.id, w.kode_sls, w.kelurahan, w.kecamatan, w.target,
+     COALESCE(SUM(CASE WHEN i.ke_lapangan > 0 THEN i.ke_lapangan ELSE 0 END), 0) AS total_lapangan,
+     COALESCE(SUM(CASE WHEN i.submit > 0 THEN i.submit ELSE 0 END), 0) AS total_submit,
+     COALESCE(SUM(CASE WHEN i.approve > 0 THEN i.approve ELSE 0 END), 0) AS total_approve
+   FROM wilayah w
+   LEFT JOIN user_sls us    ON us.wilayah_id = w.id AND us.user_id = ?
+   LEFT JOIN input_harian i ON i.wilayah_id  = w.id AND i.ppl_id   = ?
+   WHERE w.ppl_id = ? OR us.user_id = ?
+   GROUP BY w.id, w.kode_sls, w.kelurahan, w.kecamatan, w.target
+   ORDER BY w.kelurahan`,
+  [ppl_id, ppl_id, ppl_id, ppl_id],
+);
 
     return res.json(rows);
   } catch (err) {
