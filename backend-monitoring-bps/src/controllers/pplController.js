@@ -65,7 +65,7 @@ const inputHarian = async (req, res) => {
     if (cekRows.length > 0) {
       const dataLama     = cekRows[0];
       const baruLapangan = nilaiKeLapangan > 0 ? nilaiKeLapangan : dataLama.ke_lapangan;
-      const baruSubmit   = nilaiSubmit > 0 ? (parseInt(dataLama.submit) + nilaiSubmit) : dataLama.submit;
+      const baruSubmit = nilaiSubmit > 0 ? nilaiSubmit : dataLama.submit;
 
       await pool.query(
         `UPDATE input_harian
