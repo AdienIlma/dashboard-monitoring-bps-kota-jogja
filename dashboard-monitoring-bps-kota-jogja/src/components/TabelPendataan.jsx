@@ -9,10 +9,34 @@ const TabelPendataan = ({
   const [activeTab, setActiveTab] = useState("total");
   const [search, setSearch] = useState("");
   const [expandedKec, setExpandedKec] = useState(null);
+  // Sorting kolom (Target / Lapangan / Submit / Approve)
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "desc" });
+
   const activeData =
     activeTab === "total" ? kecamatanData : kecamatanHarianData;
 
   const toggleKec = (id) => setExpandedKec(expandedKec === id ? null : id);
+
+  // Klik header kolom: kalau kolom yang sama, toggle arah; kalau beda, mulai dari desc
+  const handleSort = (key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === "desc" ? "asc" : "desc" };
+      }
+      return { key, direction: "desc" };
+    });
+  };
+
+  // Urutkan array (kecamatan ataupun kelurahan) berdasarkan sortConfig aktif
+  const sortData = (arr) => {
+    if (!sortConfig.key) return arr;
+    const { key, direction } = sortConfig;
+    return [...arr].sort((a, b) => {
+      const aVal = Number(a[key] || 0);
+      const bVal = Number(b[key] || 0);
+      return direction === "asc" ? aVal - bVal : bVal - aVal;
+    });
+  };
 
   const filtered = (activeData || []).reduce((acc, kec) => {
     const q = search.toLowerCase();
@@ -27,6 +51,9 @@ const TabelPendataan = ({
     }
     return acc;
   }, []);
+
+  // Urutkan daftar kecamatan sesuai sort yang aktif
+  const sortedFiltered = sortData(filtered);
 
   const headerStyle = {
     background: "#F7F8FA",
@@ -45,6 +72,39 @@ const TabelPendataan = ({
     color: "#4A5568",
     borderBottom: "1px solid #F7F8FA",
     textAlign: "right",
+  };
+
+  // Ikon panah sort: netral (belum aktif) atau menunjukkan arah aktif
+  const SortIcon = ({ active, direction }) => (
+    <svg width="9" height="9" viewBox="0 0 10 10" fill="none" style={{ marginLeft: 3, flexShrink: 0 }}>
+      {!active ? (
+        <>
+          <path d="M2.5 4L5 1.5L7.5 4" stroke="#D1D5DB" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M2.5 6L5 8.5L7.5 6" stroke="#D1D5DB" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      ) : direction === "asc" ? (
+        <path d="M2 6.5L5 3L8 6.5" stroke="#003366" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      ) : (
+        <path d="M2 3.5L5 7L8 3.5" stroke="#003366" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      )}
+    </svg>
+  );
+
+  // Header kolom yang bisa diklik untuk sorting
+  const renderSortableHeader = (label, key) => {
+    const active = sortConfig.key === key;
+    return (
+      <th
+        onClick={() => handleSort(key)}
+        style={{ ...headerStyle, cursor: "pointer", userSelect: "none" }}
+        title="Klik untuk urutkan"
+      >
+        <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end" }}>
+          {label}
+          <SortIcon active={active} direction={sortConfig.direction} />
+        </span>
+      </th>
+    );
   };
 
   const fmt = (val, target) => {
@@ -211,14 +271,14 @@ const TabelPendataan = ({
               <th style={{ ...headerStyle, textAlign: "left", width: "38%" }}>
                 Wilayah
               </th>
-              <th style={headerStyle}>Target</th>
-              <th style={headerStyle}>Lapangan</th>
-              <th style={headerStyle}>Submit</th>
-              <th style={headerStyle}>Approve</th>
+              {renderSortableHeader("Target", "target")}
+              {renderSortableHeader("Lapangan", "sudahKeLapangan")}
+              {renderSortableHeader("Submit", "submit")}
+              {renderSortableHeader("Approve", "approve")}
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 ? (
+            {sortedFiltered.length === 0 ? (
               <tr>
                 <td
                   colSpan="5"
@@ -233,8 +293,16 @@ const TabelPendataan = ({
                 </td>
               </tr>
             ) : (
-              filtered.map((kec) => {
+              sortedFiltered.map((kec) => {
                 const isExpanded = expandedKec === kec.id || kec._autoExpand;
+                const kelurahanList = sortData(
+                  kec.kelurahan.filter(
+                    (kel) =>
+                      kel.nama &&
+                      kel.nama.trim() !== "" &&
+                      kel.nama !== kec.nama
+                  )
+                );
                 return (
                   <React.Fragment key={kec.id}>
                     <tr
@@ -303,14 +371,7 @@ const TabelPendataan = ({
                       </td>
                     </tr>
                     {isExpanded &&
-                      kec.kelurahan
-                        .filter(
-                          (kel) =>
-                          kel.nama &&
-                          kel.nama.trim() !== "" &&
-                          kel.nama !== kec.nama
-                      )
-                        .map((kel) =>  (
+                      kelurahanList.map((kel) => (
                         <tr key={kel.id} style={{ background: "#F7F8FA" }}>
                           <td
                             style={{

@@ -697,8 +697,7 @@ const getDashboardSebaranPetugas = async (req, res) => {
         w.kecamatan,
         w.kelurahan,
         CASE
-          WHEN l.recorded_at >= NOW() - INTERVAL 15 MINUTE
-            AND u.is_logged_in = TRUE
+          WHEN u.is_logged_in = TRUE   
           THEN TRUE
           ELSE FALSE
         END AS online,

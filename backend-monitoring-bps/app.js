@@ -76,6 +76,8 @@ app.use('/api/ppl',     pplRoutes);
 app.use('/api/pml',     pmlRoutes);
 app.use('/api/wilayah', wilayahRoutes);
 
+require('./src/scheduler');
+
 /*
 |--------------------------------------------------------------------------
 | Root Endpoint

@@ -160,6 +160,8 @@ const ProgressPetugas = ({
   const [filterKecamatan, setFilterKecamatan] = useState("");
   const [filterKelurahan, setFilterKelurahan] = useState("");
   const [filterPML, setFilterPML] = useState("");
+  // Sorting kolom (Target / Lapangan / Submit / Approve)
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "desc" });
 
   const rawData = activeTab === "total" ? petugasDetailData || [] : petugasHarianData || [];
   const pmlList = rawData.filter((p) => p.tipe === "PML");
@@ -255,28 +257,51 @@ const ProgressPetugas = ({
     setExpandedPPL({});
   };
 
+  // Klik header kolom: kalau kolom yang sama, toggle arah; kalau beda, mulai dari desc
+  const handleSort = (key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === "desc" ? "asc" : "desc" };
+      }
+      return { key, direction: "desc" };
+    });
+  };
+
+  // Urutkan array petugas (PML atau PPL) berdasarkan sortConfig aktif
+  const sortPetugas = (arr) => {
+    if (!sortConfig.key) return arr;
+    const { key, direction } = sortConfig;
+    return [...arr].sort((a, b) => {
+      const aVal = Number(a[key] || 0);
+      const bVal = Number(b[key] || 0);
+      return direction === "asc" ? aVal - bVal : bVal - aVal;
+    });
+  };
+
   const adaFilter = filterKecamatan || filterKelurahan || filterPML || search;
 
   // Filter PML untuk tabel
-  const filteredPML = pmlList
-    .filter((pml) => {
-      if (filterPML && String(pml.id) !== filterPML) return false;
-      if (search && !pml.nama.toLowerCase().includes(search.toLowerCase())) return false;
-      // Filter utama: apakah PML ini punya PPL dengan SLS di wilayah terpilih?
-      if (!petugasMemilikiSLSDiWilayah(pml, false)) return false;
-      return true;
-    })
-    .map((pml) => {
-      const pplDibawah = pplList.filter((p) => p.pml_id === pml.id);
-      return {
-        ...pml,
-        sudahKeLapangan: pplDibawah.reduce((sum, p) => sum + (p.sudahKeLapangan || 0), 0),
-        submit:          pplDibawah.reduce((sum, p) => sum + (p.submit || 0), 0),
-        approve:         pplDibawah.reduce((sum, p) => sum + (p.approve || 0), 0),
-        target:          pplDibawah.reduce((sum, p) => sum + (p.target || 0), 0),
-        hadirHariIni:    pml.pmlHadirSebagaiPml ?? 0,
-      };
-    });
+  const filteredPML = sortPetugas(
+    pmlList
+      .filter((pml) => {
+        if (filterPML && String(pml.id) !== filterPML) return false;
+        if (search && !pml.nama.toLowerCase().includes(search.toLowerCase())) return false;
+        // Filter utama: apakah PML ini punya PPL dengan SLS di wilayah terpilih?
+        if (!petugasMemilikiSLSDiWilayah(pml, false)) return false;
+        return true;
+      })
+      .map((pml) => {
+        const pplDibawah = pplList.filter((p) => p.pml_id === pml.id);
+        return {
+          ...pml,
+          sudahKeLapangan: pplDibawah.reduce((sum, p) => sum + (p.sudahKeLapangan || 0), 0),
+          submit:          pplDibawah.reduce((sum, p) => sum + (p.submit || 0), 0),
+          approve:         pplDibawah.reduce((sum, p) => sum + (p.approve || 0), 0),
+          target:          pplDibawah.reduce((sum, p) => sum + (p.target || 0), 0),
+          hadirHariIni:    pml.pmlHadirSebagaiPml ?? 0,
+        };
+      })
+  );
 
   // Styles
   const headerStyle = {
@@ -287,6 +312,39 @@ const ProgressPetugas = ({
   const cellStyle = {
     padding: "7px 10px", fontSize: 11, color: "#4A5568",
     borderBottom: "1px solid #F7F8FA", textAlign: "right",
+  };
+
+  // Ikon panah sort: netral (belum aktif) atau menunjukkan arah aktif
+  const SortIcon = ({ active, direction }) => (
+    <svg width="9" height="9" viewBox="0 0 10 10" fill="none" style={{ marginLeft: 3, flexShrink: 0 }}>
+      {!active ? (
+        <>
+          <path d="M2.5 4L5 1.5L7.5 4" stroke="#D1D5DB" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M2.5 6L5 8.5L7.5 6" stroke="#D1D5DB" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      ) : direction === "asc" ? (
+        <path d="M2 6.5L5 3L8 6.5" stroke="#003366" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      ) : (
+        <path d="M2 3.5L5 7L8 3.5" stroke="#003366" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      )}
+    </svg>
+  );
+
+  // Header kolom yang bisa diklik untuk sorting
+  const renderSortableHeader = (label, key) => {
+    const active = sortConfig.key === key;
+    return (
+      <th
+        onClick={() => handleSort(key)}
+        style={{ ...headerStyle, cursor: "pointer", userSelect: "none" }}
+        title="Klik untuk urutkan"
+      >
+        <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end" }}>
+          {label}
+          <SortIcon active={active} direction={sortConfig.direction} />
+        </span>
+      </th>
+    );
   };
 
   const fmt = (val, target) => {
@@ -555,7 +613,7 @@ const ProgressPetugas = ({
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{ display: "flex", gap: 6 }}>
           {/* Search nama */}
-          <div style={{ position: "relative", flex: 1 }}>
+          {/* <div style={{ position: "relative", flex: 1 }}>
             <svg width="11" height="11" viewBox="0 0 11 11" fill="none"
               style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
               <circle cx="4.5" cy="4.5" r="3.5" stroke="#B0BAC6" strokeWidth="1.3" />
@@ -572,18 +630,27 @@ const ProgressPetugas = ({
                 outline: "none", width: "100%", boxSizing: "border-box",
               }}
             />
-          </div>
+          </div> */}
 
-          {/* Filter Kecamatan — dari SLS */}
+           {/* Filter PML */}
+          <SearchableSelect
+            value={filterPML}
+            onChange={(val) => { setFilterPML(val); setExpandedPML({}); setExpandedPPL({}); }}
+            options={pmlOptions}
+            placeholder="Semua PML"
+          />
+        </div>
+
+        <div style={{ display: "flex", gap: 6 }}>
+
+             {/* Filter Kecamatan — dari SLS */}
           <SearchableSelect
             value={filterKecamatan}
             onChange={handleKecamatanChange}
             options={kecamatanOptions}
             placeholder="Semua Kecamatan"
           />
-        </div>
-
-        <div style={{ display: "flex", gap: 6 }}>
+          
           {/* Filter Kelurahan — dari SLS, bergantung kecamatan terpilih */}
           <SearchableSelect
             value={filterKelurahan}
@@ -592,14 +659,7 @@ const ProgressPetugas = ({
             placeholder="Semua Kelurahan"
           />
 
-          {/* Filter PML */}
-          <SearchableSelect
-            value={filterPML}
-            onChange={(val) => { setFilterPML(val); setExpandedPML({}); setExpandedPPL({}); }}
-            options={pmlOptions}
-            placeholder="Semua PML"
-          />
-
+         
           {adaFilter && (
             <button
               onClick={resetFilter}
@@ -639,10 +699,10 @@ const ProgressPetugas = ({
           <thead style={{ position: "sticky", top: 0, zIndex: 1 }}>
             <tr>
               <th style={{ ...headerStyle, textAlign: "left", width: "38%" }}>Nama Petugas</th>
-              <th style={headerStyle}>Target</th>
-              <th style={headerStyle}>Lapangan</th>
-              <th style={headerStyle}>Submit</th>
-              <th style={headerStyle}>Approve</th>
+              {renderSortableHeader("Target", "target")}
+              {renderSortableHeader("Lapangan", "sudahKeLapangan")}
+              {renderSortableHeader("Submit", "submit")}
+              {renderSortableHeader("Approve", "approve")}
             </tr>
           </thead>
           <tbody>
@@ -657,13 +717,15 @@ const ProgressPetugas = ({
             ) : (
               filteredPML.map((pml) => {
                 // PPL di bawah PML ini yang juga lolos filter wilayah & search
-                const pplDibawahPML = pplList.filter((p) => {
-                  if (p.pml_id !== pml.id) return false;
-                  if (search && !p.nama.toLowerCase().includes(search.toLowerCase())) return false;
-                  // PPL harus punya SLS di wilayah terpilih
-                  if (!petugasMemilikiSLSDiWilayah(p, true)) return false;
-                  return true;
-                });
+                const pplDibawahPML = sortPetugas(
+                  pplList.filter((p) => {
+                    if (p.pml_id !== pml.id) return false;
+                    if (search && !p.nama.toLowerCase().includes(search.toLowerCase())) return false;
+                    // PPL harus punya SLS di wilayah terpilih
+                    if (!petugasMemilikiSLSDiWilayah(p, true)) return false;
+                    return true;
+                  })
+                );
 
                 return (
                   <React.Fragment key={pml.id}>
