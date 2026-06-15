@@ -530,14 +530,13 @@ const getDashboardKecamatan = async (req, res) => {
       SELECT
         w.kecamatan,
         w.kelurahan,
-        w.id AS wilayah_id,
-        w.target,
+        SUM(w.target) AS target,
         COALESCE(SUM(i.ke_lapangan), 0) AS sudah_ke_lapangan,
         COALESCE(SUM(i.submit), 0)      AS submit,
         COALESCE(SUM(i.approve), 0)     AS approve
       FROM wilayah w
       LEFT JOIN input_harian i ON i.wilayah_id = w.id
-      GROUP BY w.kecamatan, w.kelurahan, w.id, w.target
+      GROUP BY w.kecamatan, w.kelurahan
       ORDER BY w.kecamatan, w.kelurahan
     `);
     res.json(buildKecamatanMap(rows));
@@ -557,15 +556,14 @@ const getDashboardKecamatanHarian = async (req, res) => {
       SELECT
         w.kecamatan,
         w.kelurahan,
-        w.id AS wilayah_id,
-        w.target,
+        SUM(w.target) AS target,
         COALESCE(SUM(i.ke_lapangan), 0) AS sudah_ke_lapangan,
         COALESCE(SUM(i.submit), 0)      AS submit,
         COALESCE(SUM(i.approve), 0)     AS approve
       FROM wilayah w
       LEFT JOIN input_harian i
         ON i.wilayah_id = w.id AND i.tanggal = ?
-      GROUP BY w.kecamatan, w.kelurahan, w.id, w.target
+      GROUP BY w.kecamatan, w.kelurahan
       ORDER BY w.kecamatan, w.kelurahan
     `, [targetDate]);
 
@@ -726,7 +724,7 @@ const getDashboardSebaranPetugas = async (req, res) => {
   }
 };
 
-// GET progress 15 hari
+// GET progress harian (semua data, filter dilakukan di frontend)
 const getDashboardProgress15Hari = async (req, res) => {
   try {
     const [rows] = await pool.query(`
@@ -736,14 +734,13 @@ const getDashboardProgress15Hari = async (req, res) => {
         COALESCE(SUM(submit), 0)      AS submit,
         COALESCE(SUM(approve), 0)     AS approve
       FROM input_harian
-      WHERE tanggal >= CURDATE() - INTERVAL 14 DAY
       GROUP BY DATE(tanggal)
       ORDER BY DATE(tanggal) ASC
     `);
     res.json(rows);
   } catch (err) {
     console.error('❌ getDashboardProgress15Hari ERROR:', err.message);
-    res.status(500).json({ message: 'Gagal ambil progress 15 hari', error: err.message });
+    res.status(500).json({ message: 'Gagal ambil progress harian', error: err.message });
   }
 };
 

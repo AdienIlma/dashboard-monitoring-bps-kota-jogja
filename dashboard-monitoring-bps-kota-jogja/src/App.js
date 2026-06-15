@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useCallback } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Capacitor, registerPlugin } from "@capacitor/core";
+import { LocalNotifications } from "@capacitor/local-notifications";
+import api from "./services/api";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import PrivateRoute from "./components/PrivateRoute";
 import KelolaPetugas from "./pages/KelolaPetugas";
 import KelolaResponden from "./pages/KelolaResponden";
-
 import ProgressPendataan from "./components/ProgressPendataan";
 import TabelPendataan from "./components/TabelPendataan";
 import PetugasLapangan from "./components/PetugasLapangan";
@@ -14,7 +16,6 @@ import Progress15Hari from "./components/Progress15Hari";
 import ProgressPetugas from "./components/ProgressPetugas";
 import DashboardPPL from "./pages/DashboardPPL";
 import DashboardPML from "./pages/DashboardPML";
-
 import {
   getPetugasData,
   getProgressData,
@@ -25,8 +26,9 @@ import {
   getPetugasDetailHarian,
   getWilayahData,
 } from "./services/dataService";
-
 import axios from "axios";
+
+const BackgroundGeolocation = registerPlugin("BackgroundGeolocation");
 
 // ─── Halaman Login ───────────────────────────────────────────
 function LoginPage() {
@@ -43,7 +45,6 @@ function LoginPage() {
     try {
       const res = await axios.post(
         "https://api.semaki.my.id/api/auth/login",
-
         { username, password },
         { headers: { "Content-Type": "application/json" } },
       );
@@ -61,7 +62,6 @@ function LoginPage() {
   return (
     <div style={loginStyles.container}>
       <div style={loginStyles.card}>
-        {/* Logo BPS */}
         <img
           src="/logo-sensus.png"
           alt="Logo BPS"
@@ -73,18 +73,12 @@ function LoginPage() {
             margin: "0 auto 1.25rem auto",
           }}
         />
-
-        {/* Brand Name */}
         <h1 style={loginStyles.brandName}>SEMAKI</h1>
         <p style={loginStyles.brandTagline}>
           Sensus Ekonomi Manajemen Aktivitas dan Kinerja
         </p>
-
-        {/* Divider */}
         <div style={loginStyles.divider} />
-
         {error && <div style={loginStyles.error}>{error}</div>}
-
         <form onSubmit={handleSubmit}>
           <div style={loginStyles.field}>
             <label style={loginStyles.label}>Email</label>
@@ -124,38 +118,16 @@ function LoginPage() {
                   alignItems: "center",
                   color: "#6b88b5",
                 }}
-                aria-label={
-                  showPassword ? "Sembunyikan password" : "Tampilkan password"
-                }
+                aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
               >
                 {showPassword ? (
-                  // Ikon mata tertutup
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
                     <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
                     <line x1="1" y1="1" x2="23" y2="23" />
                   </svg>
                 ) : (
-                  // Ikon mata terbuka
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                     <circle cx="12" cy="12" r="3" />
                   </svg>
@@ -167,7 +139,6 @@ function LoginPage() {
             {loading ? "Memproses..." : "Masuk"}
           </button>
         </form>
-
         <p style={loginStyles.footer}>
           Badan Pusat Statistik · Kota Yogyakarta
         </p>
@@ -183,8 +154,7 @@ const loginStyles = {
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#0a1628",
-    backgroundImage:
-      "radial-gradient(ellipse 80% 60% at 50% 0%, #1a3a6e 0%, #0a1628 65%)",
+    backgroundImage: "radial-gradient(ellipse 80% 60% at 50% 0%, #1a3a6e 0%, #0a1628 65%)",
   },
   card: {
     backgroundColor: "rgba(255,255,255,0.97)",
@@ -227,9 +197,7 @@ const loginStyles = {
     fontSize: "0.85rem",
     textAlign: "center",
   },
-  field: {
-    marginBottom: "1rem",
-  },
+  field: { marginBottom: "1rem" },
   label: {
     display: "block",
     marginBottom: "6px",
@@ -294,13 +262,11 @@ function AdminDashboard() {
   useEffect(() => {
     const fetchHarian = async () => {
       try {
-        const [harianKecamatan, harianPetugas, detailTotal] = await Promise.all(
-          [
-            getKecamatanHarianData(tanggalHarian),
-            getPetugasDetailHarian(tanggalHarian),
-            getPetugasDetail(),
-          ],
-        );
+        const [harianKecamatan, harianPetugas, detailTotal] = await Promise.all([
+          getKecamatanHarianData(tanggalHarian),
+          getPetugasDetailHarian(tanggalHarian),
+          getPetugasDetail(),
+        ]);
         setKecamatanHarianData(harianKecamatan);
         setPetugasHarianData(harianPetugas);
         setPetugasDetailData(detailTotal);
@@ -316,14 +282,13 @@ function AdminDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [petugas, progress, kecamatan, progress15, wilayah] =
-          await Promise.all([
-            getPetugasData(),
-            getProgressData(),
-            getKecamatanData(),
-            getProgress15Hari(),
-            getWilayahData(),
-          ]);
+        const [petugas, progress, kecamatan, progress15, wilayah] = await Promise.all([
+          getPetugasData(),
+          getProgressData(),
+          getKecamatanData(),
+          getProgress15Hari(),
+          getWilayahData(),
+        ]);
         setPetugasData(petugas);
         setProgressData(progress);
         setKecamatanData(kecamatan);
@@ -343,88 +308,45 @@ function AdminDashboard() {
   }, [stableLogout]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
       <div
         onMouseEnter={() => setShowNavbar(true)}
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 8,
-          zIndex: 9999,
-        }}
+        style={{ position: "fixed", top: 0, left: 0, right: 0, height: 8, zIndex: 9999 }}
       />
-
-      {/* Navbar */}
       <div
-        style={{
-          ...navStyles.nav,
-          transform: showNavbar ? "translateY(0)" : "translateY(-100%)",
-        }}
+        style={{ ...navStyles.nav, transform: showNavbar ? "translateY(0)" : "translateY(-100%)" }}
         onMouseLeave={() => setShowNavbar(false)}
       >
-        {/* Brand di navbar */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <img
-            src="/logo-sensus.png"
-            alt="Logo"
-            style={{ width: 28, height: 28, objectFit: "contain" }}
-          />
-          <div
-            style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}
-          >
+          <img src="/logo-sensus.png" alt="Logo" style={{ width: 28, height: 28, objectFit: "contain" }} />
+          <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
             <span style={navStyles.brandName}>SEMAKI</span>
-            <span style={navStyles.brandSub}>
-              Sensus Ekonomi Manajemen Aktivitas dan Kinerja
-            </span>
+            <span style={navStyles.brandSub}>Sensus Ekonomi Manajemen Aktivitas dan Kinerja</span>
           </div>
         </div>
-
         <div style={navStyles.tabs}>
-          {[
-            ["monitor", "📊 Monitor"],
-            ["petugas", "👥 Kelola Petugas"],
-            ["tugas", "📋 Kelola Tugas"],
-          ].map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setActiveMenu(key)}
-              style={{
-                ...navStyles.tab,
-                ...(activeMenu === key ? navStyles.tabActive : {}),
-              }}
-            >
+          {[["monitor", "📊 Monitor"], ["petugas", "👥 Kelola Petugas"], ["tugas", "📋 Kelola Tugas"]].map(([key, label]) => (
+            <button key={key} onClick={() => setActiveMenu(key)}
+              style={{ ...navStyles.tab, ...(activeMenu === key ? navStyles.tabActive : {}) }}>
               {label}
             </button>
           ))}
         </div>
-
         <div style={navStyles.right}>
           <span style={navStyles.nama}>👤 {user?.nama}</span>
-          <button style={navStyles.logoutBtn} onClick={stableLogout}>
-            Logout
-          </button>
+          <button style={navStyles.logoutBtn} onClick={stableLogout}>Logout</button>
         </div>
       </div>
 
       {error && (
-        <div
-          style={{
-            backgroundColor: "#fee2e2",
-            color: "#dc2626",
-            padding: "10px",
-            textAlign: "center",
-            fontSize: 13,
-          }}
-        >
+        <div style={{ backgroundColor: "#fee2e2", color: "#dc2626", padding: "10px", textAlign: "center", fontSize: 13 }}>
           ⚠️ {error}
         </div>
       )}
 
-      {/* Konten */}
       {activeMenu === "monitor" && (
-        <div className="dashboard" style={{ flex: 1 }}>
+        // ↓ hapus style={{ flex: 1 }}, biarkan CSS .dashboard yang mengatur
+        <div className="dashboard">
           <div className="left">
             <ProgressPendataan data={progressData} />
             <TabelPendataan
@@ -436,7 +358,9 @@ function AdminDashboard() {
           </div>
           <div className="center">
             <PetugasLapangan data={petugasData} />
-            <PetaSebaranPetugas wilayahData={wilayahList} />
+            <div className="peta-wrapper">
+              <PetaSebaranPetugas wilayahData={wilayahList} />
+            </div>
             <Progress15Hari data={progress15HariData} />
           </div>
           <div className="right">
@@ -450,13 +374,11 @@ function AdminDashboard() {
           </div>
         </div>
       )}
-
       {activeMenu === "petugas" && (
         <div style={{ flex: 1, overflow: "auto", backgroundColor: "#f0f4f8" }}>
           <KelolaPetugas />
         </div>
       )}
-
       {activeMenu === "tugas" && (
         <div style={{ flex: 1, overflow: "auto", backgroundColor: "#f0f4f8" }}>
           <KelolaResponden />
@@ -468,87 +390,157 @@ function AdminDashboard() {
 
 const navStyles = {
   nav: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 9998,
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    background: "rgba(10, 26, 50, 0.97)",
-    backdropFilter: "blur(12px)",
-    padding: "0 1.5rem",
-    color: "white",
-    height: 56,
-    boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
-    transition: "transform 0.25s ease",
+    position: "fixed", top: 0, left: 0, right: 0, zIndex: 9998,
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    background: "rgba(10, 26, 50, 0.97)", backdropFilter: "blur(12px)",
+    padding: "0 1.5rem", color: "white", height: 56,
+    boxShadow: "0 8px 24px rgba(0,0,0,0.2)", transition: "transform 0.25s ease",
   },
-  brandName: {
-    fontWeight: "800",
-    fontSize: "1rem",
-    letterSpacing: "0.12em",
-    color: "white",
-  },
-  brandSub: {
-    fontSize: "0.6rem",
-    fontWeight: "600",
-    letterSpacing: "0.14em",
-    color: "rgba(255,255,255,0.5)",
-    textTransform: "uppercase",
-    marginTop: 2,
-  },
-  tabs: {
-    display: "flex",
-    gap: 6,
-    background: "rgba(255,255,255,0.08)",
-    padding: 4,
-    borderRadius: 10,
-  },
-  tab: {
-    padding: "8px 16px",
-    border: "none",
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-    background: "transparent",
-    color: "rgba(255,255,255,0.75)",
-    transition: "all 0.2s ease",
-  },
-  tabActive: {
-    background: "white",
-    color: "#0a2a5e",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-  },
-  right: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.75rem",
-  },
-  nama: {
-    fontSize: "0.85rem",
-    opacity: 0.9,
-    whiteSpace: "nowrap",
-    background: "rgba(255,255,255,0.08)",
-    padding: "6px 10px",
-    borderRadius: 8,
-  },
-  logoutBtn: {
-    backgroundColor: "#ef4444",
-    border: "none",
-    color: "white",
-    padding: "7px 14px",
-    borderRadius: 8,
-    cursor: "pointer",
-    fontSize: "0.8rem",
-    fontWeight: 700,
-  },
+  brandName: { fontWeight: "800", fontSize: "1rem", letterSpacing: "0.12em", color: "white" },
+  brandSub: { fontSize: "0.6rem", fontWeight: "600", letterSpacing: "0.14em", color: "rgba(255,255,255,0.5)", textTransform: "uppercase", marginTop: 2 },
+  tabs: { display: "flex", gap: 6, background: "rgba(255,255,255,0.08)", padding: 4, borderRadius: 10 },
+  tab: { padding: "8px 16px", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", background: "transparent", color: "rgba(255,255,255,0.75)", transition: "all 0.2s ease" },
+  tabActive: { background: "white", color: "#0a2a5e", boxShadow: "0 2px 8px rgba(0,0,0,0.12)" },
+  right: { display: "flex", alignItems: "center", gap: "0.75rem" },
+  nama: { fontSize: "0.85rem", opacity: 0.9, whiteSpace: "nowrap", background: "rgba(255,255,255,0.08)", padding: "6px 10px", borderRadius: 8 },
+  logoutBtn: { backgroundColor: "#ef4444", border: "none", color: "white", padding: "7px 14px", borderRadius: 8, cursor: "pointer", fontSize: "0.8rem", fontWeight: 700 },
 };
 
 // ─── Router utama ─────────────────────────────────────────────
 function AppRoutes() {
   const { user } = useAuth();
+
+  // ── Background geolocation via Capacitor (APK) atau browser biasa ──
+  useEffect(() => {
+    if (!user || user.role === "admin") return;
+
+    let watcherId = null;
+
+    const startBgLokasi = async () => {
+      try {
+        if (Capacitor.isNativePlatform()) {
+          // Pakai Capacitor background geolocation — jalan meski app di-minimize
+          watcherId = await BackgroundGeolocation.addWatcher(
+            {
+              backgroundMessage: "SEMAKI sedang memantau lokasi Anda.",
+              backgroundTitle: "SEMAKI Aktif",
+              requestPermissions: true,
+              stale: false,
+              distanceFilter: 50,
+            },
+            async (location, error) => {
+              if (error) {
+                if (error.code === "NOT_AUTHORIZED") {
+                  if (window.confirm(
+                    "Agar lokasi bisa terkirim saat aplikasi di-minimize, " +
+                    "buka Pengaturan → Izin Aplikasi → Lokasi → pilih \"Izinkan sepanjang waktu\". " +
+                    "Buka pengaturan sekarang?"
+                  )) {
+                    BackgroundGeolocation.openSettings();
+                  }
+                }
+                return;
+              }
+              if (!location) return;
+              try {
+                await api.post(`/${user.role}/lokasi`, {
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                });
+              } catch (err) {
+                // silent
+              }
+            }
+          );
+        } else {
+          // Di browser biasa — pakai geolocation + interval 1 jam
+          const kirimLokasi = () => {
+            if (!navigator.geolocation) return;
+            navigator.geolocation.getCurrentPosition(
+              async (pos) => {
+                try {
+                  await api.post(`/${user.role}/lokasi`, {
+                    latitude: pos.coords.latitude,
+                    longitude: pos.coords.longitude,
+                  });
+                } catch (err) {}
+              },
+              () => {},
+              { timeout: 10000, maximumAge: 60000 }
+            );
+          };
+          kirimLokasi();
+          watcherId = setInterval(kirimLokasi, 60 * 60 * 1000);
+        }
+      } catch (err) {
+        console.warn("Background geolocation error:", err);
+      }
+    };
+
+    startBgLokasi();
+
+    return () => {
+      if (Capacitor.isNativePlatform() && watcherId) {
+        BackgroundGeolocation.removeWatcher({ id: watcherId });
+      } else if (watcherId) {
+        clearInterval(watcherId);
+      }
+    };
+  }, [user]);
+
+  // ── Notifikasi pengingat kirim lokasi tiap 1 menit (APK saja) ──
+  useEffect(() => {
+    if (!user || user.role === "admin" || !Capacitor.isNativePlatform()) return;
+
+    const setupNotif = async () => {
+      try {
+        const perm = await LocalNotifications.requestPermissions();
+        if (perm.display !== "granted") return;
+
+        await LocalNotifications.cancel({ notifications: [{ id: 1 }] });
+
+        const jadwalkanNotif = async () => {
+          await LocalNotifications.schedule({
+            notifications: [
+              {
+                id: 1,
+                title: "SEMAKI - Pengingat Lokasi",
+                body: "Anda belum kirim lokasi dalam 1 menit terakhir. Tap untuk kirim.",
+                schedule: { at: new Date(Date.now() + 60 * 1000) },
+                actionTypeId: "KIRIM_LOKASI",
+                extra: { action: "kirim_lokasi" },
+              },
+            ],
+          });
+        };
+
+        jadwalkanNotif();
+        const iv = setInterval(jadwalkanNotif, 60 * 1000);
+
+        LocalNotifications.addListener("localNotificationActionPerformed", async () => {
+          if (!navigator.geolocation) return;
+          navigator.geolocation.getCurrentPosition(async (pos) => {
+            try {
+              await api.post(`/${user.role}/lokasi`, {
+                latitude: pos.coords.latitude,
+                longitude: pos.coords.longitude,
+              });
+            } catch (err) {}
+          });
+        });
+
+        return () => {
+          clearInterval(iv);
+          LocalNotifications.cancel({ notifications: [{ id: 1 }] });
+          LocalNotifications.removeAllListeners();
+        };
+      } catch (err) {
+        console.warn("Notifikasi error:", err);
+      }
+    };
+
+    setupNotif();
+  }, [user]);
 
   if (!user) {
     return (
@@ -561,36 +553,14 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route
-        path="/admin"
-        element={
-          <PrivateRoute role="admin">
-            <AdminDashboard />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/ppl"
-        element={
-          <PrivateRoute role="ppl">
-            <DashboardPPL />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/pml"
-        element={
-          <PrivateRoute role="pml">
-            <DashboardPML />
-          </PrivateRoute>
-        }
-      />
+      <Route path="/admin" element={<PrivateRoute role="admin"><AdminDashboard /></PrivateRoute>} />
+      <Route path="/ppl" element={<PrivateRoute role="ppl"><DashboardPPL /></PrivateRoute>} />
+      <Route path="/pml" element={<PrivateRoute role="pml"><DashboardPML /></PrivateRoute>} />
       <Route path="*" element={<Navigate to={`/${user.role}`} />} />
     </Routes>
   );
 }
 
-// ─── App Utama ───────────────────────────────────────────────
 // ─── App Utama ───────────────────────────────────────────────
 function App() {
   return (

@@ -22,6 +22,7 @@ const DashboardPML = () => {
   const [jumlahApprove, setJumlahApprove] = useState({});
   const [tanggalApprove, setTanggalApprove] = useState({});
   const [riwayatOpen, setRiwayatOpen] = useState({}); // ← dipakai untuk toggle
+  const [lokasiStatus, setLokasiStatus] = useState("idle"); // idle | loading | success | error
   const [submitLoading, setSubmitLoading] = useState({});
   const [pesan, setPesan] = useState({});
 
@@ -36,9 +37,7 @@ const DashboardPML = () => {
 
   useEffect(() => {
     fetchPPL();
-    kirimLokasiOtomatis();
-    const interval = setInterval(kirimLokasiOtomatis, 10 * 60 * 1000);
-    return () => clearInterval(interval);
+
   }, []);
 
   const fetchPPL = async () => {
@@ -78,6 +77,35 @@ const DashboardPML = () => {
     }
   };
 
+  const kirimLokasiManual = () => {
+    if (!navigator.geolocation) {
+      setLokasiStatus("error");
+      setTimeout(() => setLokasiStatus("idle"), 3000);
+      return;
+    }
+    setLokasiStatus("loading");
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          await api.post("/pml/lokasi", {
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          });
+          setLokasiStatus("success");
+        } catch (err) {
+          setLokasiStatus("error");
+        } finally {
+          setTimeout(() => setLokasiStatus("idle"), 3000);
+        }
+      },
+      () => {
+        setLokasiStatus("error");
+        setTimeout(() => setLokasiStatus("idle"), 3000);
+      },
+      { timeout: 10000 }
+    );
+  };
+
   const handleTogglePPL = (ppl) => {
     const id = ppl.id;
     if (expandedPPL === id) {
@@ -92,19 +120,6 @@ const DashboardPML = () => {
     }
   };
 
-  const kirimLokasiOtomatis = () => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(async (pos) => {
-      try {
-        await api.post("/pml/lokasi", {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-        });
-      } catch (err) {
-        console.error("Gagal kirim lokasi", err);
-      }
-    });
-  };
 
   const handlePilihSLS = (ppl_id, w) => {
     setSelectedSLS((prev) => ({ ...prev, [ppl_id]: w }));
@@ -279,9 +294,38 @@ const DashboardPML = () => {
             <div style={styles.headerRole}>Petugas PML</div>
           </div>
         </div>
-        <button style={styles.logoutBtn} onClick={logout}>
-          Keluar
-        </button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            onClick={kirimLokasiManual}
+            disabled={lokasiStatus === "loading"}
+            style={{
+              backgroundColor:
+                lokasiStatus === "success" ? "#1D9E75"
+                : lokasiStatus === "error" ? "#DC2626"
+                : "transparent",
+              border: "1px solid rgba(255,255,255,0.2)",
+              color: "rgba(255,255,255,0.9)",
+              padding: "6px 12px",
+              borderRadius: 8,
+              cursor: lokasiStatus === "loading" ? "not-allowed" : "pointer",
+              fontSize: 11,
+              fontWeight: 500,
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              transition: "all 0.2s",
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="10" r="3" />
+              <path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 14-8 14S4 15.25 4 10a8 8 0 0 1 8-8z" />
+            </svg>
+            {lokasiStatus === "loading" ? "..." : lokasiStatus === "success" ? "Terkirim ✓" : lokasiStatus === "error" ? "Gagal ✗" : "Kirim Lokasi"}
+          </button>
+          <button style={styles.logoutBtn} onClick={logout}>
+            Keluar
+          </button>
+        </div>
       </div>
 
       {/* Daftar PPL */}

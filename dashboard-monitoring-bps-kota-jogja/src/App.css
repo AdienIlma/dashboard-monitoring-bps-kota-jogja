@@ -1,20 +1,21 @@
 .dashboard {
   display: grid;
-  grid-template-columns: 1fr 3fr 1fr; /* 1:3:1 */
+  grid-template-columns: min-content 1fr min-content;
   gap: 16px;
   padding: 16px;
   height: 100vh;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
-/* Kolom */
 .left, .center, .right {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-height: 0;
+  overflow: hidden;
 }
 
-/* Optional styling biar keliatan */
 .left > *,
 .center > *,
 .right > * {
@@ -22,5 +23,50 @@
   padding: 12px;
   border-radius: 8px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  flex-shrink: 0;
 }
 
+/* Progress Pendataan tetap di atas, tidak ikut scroll */
+.left > *:first-child {
+  flex-shrink: 0;
+}
+
+/* Tabel Pendataan isi sisa ruang + scroll tanpa scrollbar */
+.left > *:last-child {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.left > *:last-child::-webkit-scrollbar { display: none; }
+
+/* Kolom tengah scroll tanpa scrollbar */
+.center {
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.center::-webkit-scrollbar { display: none; }
+
+/* Peta tinggi fixed, tidak mengecil */
+.peta-wrapper {
+  height: 460px !important;
+  flex-shrink: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* Kolom kanan isi penuh + scroll tanpa scrollbar */
+.right > * {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.right > *::-webkit-scrollbar { display: none; }

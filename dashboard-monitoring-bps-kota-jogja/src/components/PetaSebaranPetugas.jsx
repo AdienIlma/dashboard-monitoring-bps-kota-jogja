@@ -1039,7 +1039,7 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, height: "100%" }}>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       {/* Header */}
       <div
@@ -1311,15 +1311,17 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
         )}
       </div>
 
+
       {/* Map */}
-      <div
-        style={{
-          borderRadius: 12,
-          overflow: "hidden",
-          border: "1px solid #EBEEf2",
-          height: 460,
-        }}
-      >
+        <div
+          style={{
+            borderRadius: 12,
+            overflow: "hidden",
+            border: "1px solid #EBEEf2",
+            height: 380,   // ← fixed height, sesuaikan angkanya
+            flexShrink: 0,
+          }}
+        >
         <MapContainer
           center={[-7.801389, 110.364444]}
           zoom={13}
