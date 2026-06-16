@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import * as XLSX from "xlsx";
 
 const TabelPendataan = ({
   kecamatanData,
@@ -10,7 +11,10 @@ const TabelPendataan = ({
   const [search, setSearch] = useState("");
   const [expandedKec, setExpandedKec] = useState(null);
   // Sorting kolom (Target / Lapangan / Submit / Approve)
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: "desc" });
+  const [sortConfig, setSortConfig] = useState({
+    key: null,
+    direction: "desc",
+  });
 
   const activeData =
     activeTab === "total" ? kecamatanData : kecamatanHarianData;
@@ -76,16 +80,46 @@ const TabelPendataan = ({
 
   // Ikon panah sort: netral (belum aktif) atau menunjukkan arah aktif
   const SortIcon = ({ active, direction }) => (
-    <svg width="9" height="9" viewBox="0 0 10 10" fill="none" style={{ marginLeft: 3, flexShrink: 0 }}>
+    <svg
+      width="9"
+      height="9"
+      viewBox="0 0 10 10"
+      fill="none"
+      style={{ marginLeft: 3, flexShrink: 0 }}
+    >
       {!active ? (
         <>
-          <path d="M2.5 4L5 1.5L7.5 4" stroke="#D1D5DB" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M2.5 6L5 8.5L7.5 6" stroke="#D1D5DB" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+          <path
+            d="M2.5 4L5 1.5L7.5 4"
+            stroke="#D1D5DB"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M2.5 6L5 8.5L7.5 6"
+            stroke="#D1D5DB"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </>
       ) : direction === "asc" ? (
-        <path d="M2 6.5L5 3L8 6.5" stroke="#003366" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M2 6.5L5 3L8 6.5"
+          stroke="#003366"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       ) : (
-        <path d="M2 3.5L5 7L8 3.5" stroke="#003366" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M2 3.5L5 7L8 3.5"
+          stroke="#003366"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       )}
     </svg>
   );
@@ -99,7 +133,13 @@ const TabelPendataan = ({
         style={{ ...headerStyle, cursor: "pointer", userSelect: "none" }}
         title="Klik untuk urutkan"
       >
-        <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end" }}>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+          }}
+        >
           {label}
           <SortIcon active={active} direction={sortConfig.direction} />
         </span>
@@ -118,6 +158,59 @@ const TabelPendataan = ({
         </span>
       </span>
     );
+  };
+
+  const handleDownloadExcel = () => {
+    const buildSheet = (data) => {
+      const rows = [
+        ["Wilayah", "Level", "Target", "Lapangan", "Submit", "Approve"],
+      ];
+      (data || []).forEach((kec) => {
+        rows.push([
+          kec.nama,
+          "Kecamatan",
+          kec.target || 0,
+          kec.sudahKeLapangan || 0,
+          kec.submit || 0,
+          kec.approve || 0,
+        ]);
+        (kec.kelurahan || [])
+          .filter(
+            (kel) =>
+              kel.nama && kel.nama.trim() !== "" && kel.nama !== kec.nama,
+          )
+          .forEach((kel) => {
+            rows.push([
+              kel.nama,
+              "Kelurahan",
+              kel.target || 0,
+              kel.sudahKeLapangan || 0,
+              kel.submit || 0,
+              kel.approve || 0,
+            ]);
+          });
+      });
+      return rows;
+    };
+
+    const wb = XLSX.utils.book_new();
+
+    const wsTotal = XLSX.utils.aoa_to_sheet(buildSheet(kecamatanData));
+    wsTotal["!cols"] = [
+      { wch: 28 },
+      { wch: 12 },
+      { wch: 9 },
+      { wch: 11 },
+      { wch: 9 },
+      { wch: 9 },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsTotal, "Data Total");
+
+    const wsHarian = XLSX.utils.aoa_to_sheet(buildSheet(kecamatanHarianData));
+    wsHarian["!cols"] = wsTotal["!cols"];
+    XLSX.utils.book_append_sheet(wb, wsHarian, `Harian ${tanggalHarian}`);
+
+    XLSX.writeFile(wb, `tabel_pendataan_${tanggalHarian}.xlsx`);
   };
 
   return (
@@ -140,15 +233,37 @@ const TabelPendataan = ({
           paddingBottom: 10,
           display: "flex",
           alignItems: "center",
-          gap: 6,
+          justifyContent: "space-between", // ← tambahan
         }}
       >
-        <i
-          className="ti ti-table"
-          style={{ fontSize: 14, color: "#E8702A" }}
-          aria-hidden="true"
-        />
-        Tabel Pendataan
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <i
+            className="ti ti-table"
+            style={{ fontSize: 14, color: "#E8702A" }}
+            aria-hidden="true"
+          />
+          Tabel Pendataan
+        </div>
+        <button
+          onClick={handleDownloadExcel}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            fontSize: 10,
+            fontWeight: 600,
+            padding: "4px 10px",
+            border: "1px solid #BBF0DC",
+            borderRadius: 7,
+            background: "#EDFAF4",
+            color: "#1D9E75",
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <i className="ti ti-download" style={{ fontSize: 12 }} />
+          Unduh Excel
+        </button>
       </div>
 
       {/* Tab */}
@@ -300,8 +415,8 @@ const TabelPendataan = ({
                     (kel) =>
                       kel.nama &&
                       kel.nama.trim() !== "" &&
-                      kel.nama !== kec.nama
-                  )
+                      kel.nama !== kec.nama,
+                  ),
                 );
                 return (
                   <React.Fragment key={kec.id}>

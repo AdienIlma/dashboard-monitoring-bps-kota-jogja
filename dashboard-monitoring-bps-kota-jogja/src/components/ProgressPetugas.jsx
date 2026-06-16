@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import * as XLSX from 'xlsx';
 
 // SearchableSelect
 const SearchableSelect = ({ value, onChange, options, placeholder }) => {
@@ -794,6 +795,60 @@ const ProgressPetugas = ({
     );
   };
 
+  const buildSheetData = (detailData, wilayahSrc) => {
+  const rows = [];
+  const pmlArr = (detailData || []).filter(p => p.tipe === 'PML');
+  const pplArr = (detailData || []).filter(p => p.tipe === 'PPL');
+  const slsArr = (wilayahSrc || []).filter(w => w.kode_sls && w.kode_sls.trim() !== '');
+
+  // Header
+  rows.push(['Nama', 'Role', 'Kode SLS', 'Kecamatan', 'Kelurahan', 'Target', 'Lapangan', 'Submit', 'Approve']);
+
+  pmlArr.forEach(pml => {
+    const pplDibawah = pplArr.filter(p => p.pml_id === pml.id);
+    const totalTarget = pplDibawah.reduce((s, p) => s + (p.target || 0), 0);
+    const totalLapangan = pplDibawah.reduce((s, p) => s + (p.sudahKeLapangan || 0), 0);
+    const totalSubmit = pplDibawah.reduce((s, p) => s + (p.submit || 0), 0);
+    const totalApprove = pplDibawah.reduce((s, p) => s + (p.approve || 0), 0);
+
+    // Baris PML
+    rows.push(['PML', pml.nama, '', '', '', totalTarget, totalLapangan, totalSubmit, totalApprove]);
+
+    pplDibawah.forEach(ppl => {
+      // Baris PPL
+      rows.push(['PPL', ppl.nama, '', '', '', ppl.target || 0, ppl.sudahKeLapangan || 0, ppl.submit || 0, ppl.approve || 0]);
+
+      // Baris SLS milik PPL ini
+      slsArr.filter(s => s.ppl_id === ppl.id).forEach(sls => {
+        rows.push([
+          'SLS', '', sls.kode_sls, sls.kecamatan || '', sls.kelurahan || '',
+          sls.target || 0, sls.sudahKeLapangan ?? '', sls.submit ?? '', sls.approve ?? ''
+        ]);
+      });
+    });
+  });
+
+  return rows;
+};
+
+const handleDownloadExcel = () => {
+  const wb = XLSX.utils.book_new();
+
+  // Sheet Total
+  const dataTotal = buildSheetData(petugasDetailData, wilayahData);
+  const wsTotal = XLSX.utils.aoa_to_sheet(dataTotal);
+  wsTotal['!cols'] = [{ wch: 6 }, { wch: 28 }, { wch: 14 }, { wch: 20 }, { wch: 20 }, { wch: 9 }, { wch: 11 }, { wch: 9 }, { wch: 9 }];
+  XLSX.utils.book_append_sheet(wb, wsTotal, 'Data Total');
+
+  // Sheet Harian
+  const dataHarian = buildSheetData(petugasHarianData, wilayahHarianData);
+  const wsHarian = XLSX.utils.aoa_to_sheet(dataHarian);
+  wsHarian['!cols'] = wsTotal['!cols'];
+  XLSX.utils.book_append_sheet(wb, wsHarian, `Harian ${tanggalHarian}`);
+
+  XLSX.writeFile(wb, `progress_petugas_${tanggalHarian}.xlsx`);
+};
+
   return (
     <div
       style={{
@@ -803,28 +858,47 @@ const ProgressPetugas = ({
         gap: 8,
       }}
     >
-      {/* Header */}
-      <div
-        style={{
-          fontSize: 11,
-          fontWeight: 500,
-          color: "#9AA5B4",
-          letterSpacing: "0.07em",
-          textTransform: "uppercase",
-          borderBottom: "1px solid #F0F2F5",
-          paddingBottom: 10,
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-        }}
-      >
-        <i
-          className="ti ti-users"
-          style={{ fontSize: 14, color: "#E8702A" }}
-          aria-hidden="true"
-        />
-        Progress Petugas
-      </div>
+
+{/* Header */}
+<div
+  style={{
+    fontSize: 11,
+    fontWeight: 500,
+    color: '#9AA5B4',
+    letterSpacing: '0.07em',
+    textTransform: 'uppercase',
+    borderBottom: '1px solid #F0F2F5',
+    paddingBottom: 10,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between', // ← tambahkan ini
+  }}
+>
+  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+    <i className="ti ti-users" style={{ fontSize: 14, color: '#E8702A' }} aria-hidden="true" />
+    Progress Petugas
+  </div>
+  <button
+    onClick={handleDownloadExcel}
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: 5,
+      fontSize: 10,
+      fontWeight: 600,
+      padding: '4px 10px',
+      border: '1px solid #BBF0DC',
+      borderRadius: 7,
+      background: '#EDFAF4',
+      color: '#1D9E75',
+      cursor: 'pointer',
+      whiteSpace: 'nowrap',
+    }}
+  >
+    <i className="ti ti-download" style={{ fontSize: 12 }} />
+    Unduh Excel
+  </button>
+</div>
 
       {/* Tab Total / Harian */}
       <div
