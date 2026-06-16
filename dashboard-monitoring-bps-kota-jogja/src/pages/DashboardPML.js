@@ -37,7 +37,6 @@ const DashboardPML = () => {
 
   useEffect(() => {
     fetchPPL();
-
   }, []);
 
   const fetchPPL = async () => {
@@ -102,7 +101,7 @@ const DashboardPML = () => {
         setLokasiStatus("error");
         setTimeout(() => setLokasiStatus("idle"), 3000);
       },
-      { timeout: 10000 }
+      { timeout: 10000 },
     );
   };
 
@@ -119,7 +118,6 @@ const DashboardPML = () => {
       if (!wilayahMap[id]) fetchWilayah(id);
     }
   };
-
 
   const handlePilihSLS = (ppl_id, w) => {
     setSelectedSLS((prev) => ({ ...prev, [ppl_id]: w }));
@@ -300,9 +298,11 @@ const DashboardPML = () => {
             disabled={lokasiStatus === "loading"}
             style={{
               backgroundColor:
-                lokasiStatus === "success" ? "#1D9E75"
-                : lokasiStatus === "error" ? "#DC2626"
-                : "transparent",
+                lokasiStatus === "success"
+                  ? "#1D9E75"
+                  : lokasiStatus === "error"
+                    ? "#DC2626"
+                    : "transparent",
               border: "1px solid rgba(255,255,255,0.2)",
               color: "rgba(255,255,255,0.9)",
               padding: "6px 12px",
@@ -316,11 +316,26 @@ const DashboardPML = () => {
               transition: "all 0.2s",
             }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <circle cx="12" cy="10" r="3" />
               <path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 14-8 14S4 15.25 4 10a8 8 0 0 1 8-8z" />
             </svg>
-            {lokasiStatus === "loading" ? "..." : lokasiStatus === "success" ? "Terkirim ✓" : lokasiStatus === "error" ? "Gagal ✗" : "Kirim Lokasi"}
+            {lokasiStatus === "loading"
+              ? "..."
+              : lokasiStatus === "success"
+                ? "Terkirim ✓"
+                : lokasiStatus === "error"
+                  ? "Gagal ✗"
+                  : "Kirim Lokasi"}
           </button>
           <button style={styles.logoutBtn} onClick={logout}>
             Keluar
@@ -831,7 +846,13 @@ const DashboardPML = () => {
                                     border: "1px solid #EBEEf2",
                                   }}
                                 >
-                                  <div style={{ display: "flex", gap: 8 }}>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      flexDirection: "column",
+                                      gap: 6,
+                                    }}
+                                  >
                                     <div style={{ flex: 1 }}>
                                       <label style={styles.label}>Dari</label>
                                       <input
@@ -1244,7 +1265,7 @@ const styles = {
     width: "100%",
     maxWidth: 480,
     margin: "0 auto",
-    padding: "1rem",
+    padding: "0.75rem",
     backgroundColor: "#F0F2F5",
     minHeight: "100vh",
     boxSizing: "border-box",
@@ -1330,11 +1351,11 @@ const styles = {
   pplInfo: { flex: 1 },
   pplName: { fontSize: 13, fontWeight: 500, color: "#2D3748" },
   pplemail: { fontSize: 11, color: "#9AA5B4", marginTop: 1 },
-  pplStats: { display: "flex", gap: 12 },
+  pplStats: { display: "flex", gap: 8 },
   pplStat: { textAlign: "center" },
-  pplStatNum: { fontSize: 15, fontWeight: 500, lineHeight: 1 },
+  pplStatNum: { fontSize: 13, fontWeight: 500, lineHeight: 1 },
   pplStatLabel: {
-    fontSize: 9,
+    fontSize: 8,
     color: "#9AA5B4",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
@@ -1364,7 +1385,7 @@ const styles = {
     background: "white",
     border: "1px solid #EBEEf2",
     borderRadius: 10,
-    padding: "8px 6px",
+    padding: "6px 4px",
     textAlign: "center",
   },
   summaryNum: { fontSize: 20, fontWeight: 500 },
@@ -1489,16 +1510,17 @@ const styles = {
   inputItem: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     padding: "8px 0",
     borderBottom: "1px solid #F0F2F5",
   },
-  inputLeft: { flex: 1 },
+  inputLeft: { flex: 1, minWidth: 0 },
   inputWilayah: {
     fontSize: 12,
     fontWeight: 500,
     color: "#2D3748",
     marginBottom: 2,
+    wordBreak: "break-word",
   },
   inputDate: { fontSize: 10, color: "#9AA5B4" },
   inputCatatan: {

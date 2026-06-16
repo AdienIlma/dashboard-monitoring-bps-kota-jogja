@@ -846,22 +846,32 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
 
   // ── FIX: normalize lat/lng ke number saat data masuk ──────────────────
   const fetchData = useCallback(async () => {
-    setIsRefreshing(true);
-    try {
-      const data = await getSebaranPetugas();
-      const normalized = data.map((p) => ({
-        ...p,
-        lat: p.lat != null && p.lat !== "" ? parseFloat(p.lat) : null,
-        lng: p.lng != null && p.lng !== "" ? parseFloat(p.lng) : null,
-      }));
-      setSebaranData(normalized);
-      setLastUpdate(new Date());
-    } catch (err) {
-      console.error("Gagal ambil sebaran:", err);
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, []);
+  setIsRefreshing(true);
+  try {
+    const data = await getSebaranPetugas();
+    
+    // Dedup by id — ambil baris pertama tiap user
+    const seen = new Set();
+    const deduped = data.filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+    
+    const normalized = deduped.map((p) => ({
+      ...p,
+      lat: p.lat != null && p.lat !== "" ? parseFloat(p.lat) : null,
+      lng: p.lng != null && p.lng !== "" ? parseFloat(p.lng) : null,
+    }));
+    
+    setSebaranData(normalized);
+    setLastUpdate(new Date());
+  } catch (err) {
+    console.error("Gagal ambil sebaran:", err);
+  } finally {
+    setIsRefreshing(false);
+  }
+}, []);
 
   useEffect(() => {
     fetchData();
