@@ -1,14 +1,16 @@
 const pool = require("../config/db");
 const bcrypt = require("bcryptjs");
-const XLSX = require('xlsx');
-const multer = require('multer');
+const XLSX = require("xlsx");
+const multer = require("multer");
 
 // Multer: simpan file sementara di memory
 const upload = multer({ storage: multer.memoryStorage() });
 
 const syncWilayahPplId = async (pool, userId, wilayahIds) => {
   // 1. Reset semua wilayah yang sebelumnya milik user ini
-  await pool.query(`UPDATE wilayah SET ppl_id = NULL WHERE ppl_id = ?`, [userId]);
+  await pool.query(`UPDATE wilayah SET ppl_id = NULL WHERE ppl_id = ?`, [
+    userId,
+  ]);
 
   // 2. Hapus semua relasi lama di user_sls
   await pool.query(`DELETE FROM user_sls WHERE user_id = ?`, [userId]);
@@ -19,12 +21,12 @@ const syncWilayahPplId = async (pool, userId, wilayahIds) => {
       `INSERT INTO user_sls (user_id, wilayah_id)
        VALUES (?, ?)
        ON DUPLICATE KEY UPDATE user_id = user_id`,
-      [userId, wilayahId]
+      [userId, wilayahId],
     );
-    await pool.query(
-      `UPDATE wilayah SET ppl_id = ? WHERE id = ?`,
-      [userId, wilayahId]
-    );
+    await pool.query(`UPDATE wilayah SET ppl_id = ? WHERE id = ?`, [
+      userId,
+      wilayahId,
+    ]);
   }
 };
 
@@ -38,23 +40,28 @@ const createUser = async (req, res) => {
     role,
     pml_id,
     nomor_whatsapp,
-    wilayah_ids = []
+    wilayah_ids = [],
   } = req.body;
 
   if (!nama || !email || !password || !role) {
-    return res.status(400).json({ message: 'nama, email, password, role wajib diisi' });
+    return res
+      .status(400)
+      .json({ message: "nama, email, password, role wajib diisi" });
   }
-  if (!['admin', 'pml', 'ppl'].includes(role)) {
-    return res.status(400).json({ message: 'Role tidak valid' });
+  if (!["admin", "pml", "ppl"].includes(role)) {
+    return res.status(400).json({ message: "Role tidak valid" });
   }
-  if (role === 'ppl' && !pml_id) {
-    return res.status(400).json({ message: 'PPL harus punya PML' });
+  if (role === "ppl" && !pml_id) {
+    return res.status(400).json({ message: "PPL harus punya PML" });
   }
 
   try {
-    const [cekRows] = await pool.query('SELECT id FROM users WHERE username = ?', [email]);
+    const [cekRows] = await pool.query(
+      "SELECT id FROM users WHERE username = ?",
+      [email],
+    );
     if (cekRows.length > 0) {
-      return res.status(400).json({ message: 'Email sudah dipakai' });
+      return res.status(400).json({ message: "Email sudah dipakai" });
     }
 
     const hashed = await bcrypt.hash(password, 10);
@@ -67,9 +74,9 @@ const createUser = async (req, res) => {
         email,
         hashed,
         role,
-        role === 'ppl' ? pml_id : null,
-        nomor_whatsapp || null
-      ]
+        role === "ppl" ? pml_id : null,
+        nomor_whatsapp || null,
+      ],
     );
 
     const userId = result.insertId;
@@ -77,18 +84,22 @@ const createUser = async (req, res) => {
     const [userRows] = await pool.query(
       `SELECT id, nama, username AS email, role, pml_id, nomor_whatsapp, created_at
        FROM users WHERE id = ?`,
-      [userId]
+      [userId],
     );
     const user = userRows[0];
 
-    if (role === 'ppl' && Array.isArray(wilayah_ids) && wilayah_ids.length > 0) {
+    if (
+      role === "ppl" &&
+      Array.isArray(wilayah_ids) &&
+      wilayah_ids.length > 0
+    ) {
       await syncWilayahPplId(pool, userId, wilayah_ids.map(Number));
     }
 
-    res.status(201).json({ message: 'User berhasil dibuat', user });
+    res.status(201).json({ message: "User berhasil dibuat", user });
   } catch (err) {
-    console.error('❌ createUser ERROR:', err.message);
-    res.status(500).json({ message: 'Gagal buat user', error: err.message });
+    console.error("❌ createUser ERROR:", err.message);
+    res.status(500).json({ message: "Gagal buat user", error: err.message });
   }
 };
 
@@ -103,47 +114,64 @@ const updateUser = async (req, res) => {
     pml_id,
     password,
     nomor_whatsapp,
-    wilayah_ids = []
+    wilayah_ids = [],
   } = req.body;
 
   try {
     const [cekRows] = await pool.query(
-      'SELECT id FROM users WHERE username = ? AND id != ?',
-      [email, id]
+      "SELECT id FROM users WHERE username = ? AND id != ?",
+      [email, id],
     );
     if (cekRows.length > 0) {
-      return res.status(400).json({ message: 'Email sudah digunakan' });
+      return res.status(400).json({ message: "Email sudah digunakan" });
     }
 
-    if (password && password.trim() !== '') {
+    if (password && password.trim() !== "") {
       const hashed = await bcrypt.hash(password, 10);
       await pool.query(
         `UPDATE users
          SET nama = ?, username = ?, role = ?, pml_id = ?,
              nomor_whatsapp = ?, password = ?
          WHERE id = ?`,
-        [nama, email, role, role === 'ppl' ? pml_id : null, nomor_whatsapp || null, hashed, id]
+        [
+          nama,
+          email,
+          role,
+          role === "ppl" ? pml_id : null,
+          nomor_whatsapp || null,
+          hashed,
+          id,
+        ],
       );
     } else {
       await pool.query(
         `UPDATE users
          SET nama = ?, username = ?, role = ?, pml_id = ?, nomor_whatsapp = ?
          WHERE id = ?`,
-        [nama, email, role, role === 'ppl' ? pml_id : null, nomor_whatsapp || null, id]
+        [
+          nama,
+          email,
+          role,
+          role === "ppl" ? pml_id : null,
+          nomor_whatsapp || null,
+          id,
+        ],
       );
     }
 
-    if (role === 'ppl') {
+    if (role === "ppl") {
       await syncWilayahPplId(pool, Number(id), wilayah_ids.map(Number));
     } else {
-      await pool.query(`UPDATE wilayah SET ppl_id = NULL WHERE ppl_id = ?`, [id]);
+      await pool.query(`UPDATE wilayah SET ppl_id = NULL WHERE ppl_id = ?`, [
+        id,
+      ]);
       await pool.query(`DELETE FROM user_sls WHERE user_id = ?`, [id]);
     }
 
-    res.json({ message: 'User berhasil diupdate' });
+    res.json({ message: "User berhasil diupdate" });
   } catch (err) {
-    console.error('❌ updateUser ERROR:', err.message);
-    res.status(500).json({ message: 'Gagal update user', error: err.message });
+    console.error("❌ updateUser ERROR:", err.message);
+    res.status(500).json({ message: "Gagal update user", error: err.message });
   }
 };
 
@@ -152,11 +180,11 @@ const updateUser = async (req, res) => {
 const deleteUser = async (req, res) => {
   const { id } = req.params;
   try {
-    await pool.query('DELETE FROM users WHERE id = ?', [id]);
-    res.json({ message: 'User berhasil dihapus' });
+    await pool.query("DELETE FROM users WHERE id = ?", [id]);
+    res.json({ message: "User berhasil dihapus" });
   } catch (err) {
-    console.error('❌ deleteUser ERROR:', err.message);
-    res.status(500).json({ message: 'Gagal hapus user', error: err.message });
+    console.error("❌ deleteUser ERROR:", err.message);
+    res.status(500).json({ message: "Gagal hapus user", error: err.message });
   }
 };
 
@@ -166,100 +194,137 @@ const deleteUsersBulk = async (req, res) => {
   const { ids } = req.body;
 
   if (!Array.isArray(ids) || ids.length === 0) {
-    return res.status(400).json({ message: 'IDs tidak boleh kosong' });
+    return res.status(400).json({ message: "IDs tidak boleh kosong" });
   }
 
   try {
-    const placeholders = ids.map(() => '?').join(',');
-    await pool.query(
-      `DELETE FROM users WHERE id IN (${placeholders})`,
-      ids
-    );
+    const placeholders = ids.map(() => "?").join(",");
+    await pool.query(`DELETE FROM users WHERE id IN (${placeholders})`, ids);
     res.json({ message: `${ids.length} user berhasil dihapus` });
   } catch (err) {
-    console.error('❌ deleteUsersBulk ERROR:', err.message);
-    res.status(500).json({ message: 'Gagal hapus bulk', error: err.message });
+    console.error("❌ deleteUsersBulk ERROR:", err.message);
+    res.status(500).json({ message: "Gagal hapus bulk", error: err.message });
   }
 };
 // IMPORT dari Excel
 
 const importUsers = async (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ message: 'File Excel tidak ditemukan' });
+    return res.status(400).json({ message: "File Excel tidak ditemukan" });
   }
 
   try {
-    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
     if (rows.length === 0) {
-      return res.status(400).json({ message: 'File Excel kosong' });
+      return res.status(400).json({ message: "File Excel kosong" });
     }
 
     const results = { berhasil: 0, gagal: [], total: rows.length };
 
     const normalized = rows.map((row) => ({
-      nama:           String(row['nama']           || row['Nama']           || '').trim(),
-      email:          String(row['email']          || row['Email']          || '').trim().toLowerCase(),
-      password:       String(row['password']       || row['Password']       || '').trim(),
-      role:           String(row['role']           || row['Role']           || 'ppl').trim().toLowerCase(),
-      nomor_whatsapp: String(row['nomor_whatsapp'] || row['NoWA'] || row['no_wa'] || '').trim(),
-      pml_email:      String(row['pml_email']      || row['PML Email']      || '').trim().toLowerCase(),
-      kode_sls_raw:   String(row['kode_sls']       || row['Kode SLS']       || '').trim(),
+      nama: String(row["nama"] || row["Nama"] || "").trim(),
+      email: String(row["email"] || row["Email"] || "")
+        .trim()
+        .toLowerCase(),
+      password: String(row["password"] || row["Password"] || "").trim(),
+      role: String(row["role"] || row["Role"] || "ppl")
+        .trim()
+        .toLowerCase(),
+      nomor_whatsapp: String(
+        row["nomor_whatsapp"] || row["NoWA"] || row["no_wa"] || "",
+      ).trim(),
+      pml_email: String(row["pml_email"] || row["PML Email"] || "")
+        .trim()
+        .toLowerCase(),
+      kode_sls_raw: String(row["kode_sls"] || row["Kode SLS"] || "").trim(),
     }));
 
     const processRow = async (row, allowedRoles) => {
-      const { nama, email, password, role, nomor_whatsapp, pml_email, kode_sls_raw } = row;
+      const {
+        nama,
+        email,
+        password,
+        role,
+        nomor_whatsapp,
+        pml_email,
+        kode_sls_raw,
+      } = row;
 
       if (!allowedRoles.includes(role)) return;
 
       if (!nama || !email || !password) {
-        results.gagal.push({ email: email || '(kosong)', alasan: 'nama, email, password wajib diisi' });
+        results.gagal.push({
+          email: email || "(kosong)",
+          alasan: "nama, email, password wajib diisi",
+        });
         return;
       }
-      if (!['admin', 'pml', 'ppl'].includes(role)) {
+      if (!["admin", "pml", "ppl"].includes(role)) {
         results.gagal.push({ email, alasan: `Role "${role}" tidak valid` });
         return;
       }
 
       try {
-        const [cekRows] = await pool.query('SELECT id FROM users WHERE username = ?', [email]);
+        const [cekRows] = await pool.query(
+          "SELECT id FROM users WHERE username = ?",
+          [email],
+        );
         if (cekRows.length > 0) {
-          results.gagal.push({ email, alasan: 'Email sudah dipakai' });
+          results.gagal.push({ email, alasan: "Email sudah dipakai" });
           return;
         }
 
         let pml_id = null;
-        if (role === 'ppl') {
+        if (role === "ppl") {
           if (!pml_email) {
-            results.gagal.push({ email, alasan: 'PPL harus mengisi kolom pml_email' });
+            results.gagal.push({
+              email,
+              alasan: "PPL harus mengisi kolom pml_email",
+            });
             return;
           }
           const [pmlRows] = await pool.query(
             `SELECT id FROM users WHERE username = ? AND role = 'pml'`,
-            [pml_email]
+            [pml_email],
           );
           if (pmlRows.length === 0) {
-            results.gagal.push({ email, alasan: `PML dengan email "${pml_email}" tidak ditemukan` });
+            results.gagal.push({
+              email,
+              alasan: `PML dengan email "${pml_email}" tidak ditemukan`,
+            });
             return;
           }
           pml_id = pmlRows[0].id;
         }
 
         const wilayah_ids = [];
-        if (role === 'ppl') {
+        if (role === "ppl") {
           if (!kode_sls_raw) {
-            results.gagal.push({ email, alasan: 'PPL harus mengisi kolom kode_sls' });
+            results.gagal.push({
+              email,
+              alasan: "PPL harus mengisi kolom kode_sls",
+            });
             return;
           }
 
-          const kodeSls = kode_sls_raw.split(',').map((k) => k.trim()).filter(Boolean);
+          const kodeSls = kode_sls_raw
+            .split(",")
+            .map((k) => k.trim())
+            .filter(Boolean);
           for (const kode of kodeSls) {
-            const [wRows] = await pool.query('SELECT id FROM wilayah WHERE kode_sls = ?', [kode]);
+            const [wRows] = await pool.query(
+              "SELECT id FROM wilayah WHERE kode_sls = ?",
+              [kode],
+            );
             if (wRows.length === 0) {
-              results.gagal.push({ email, alasan: `Kode SLS "${kode}" tidak ditemukan` });
+              results.gagal.push({
+                email,
+                alasan: `Kode SLS "${kode}" tidak ditemukan`,
+              });
               return;
             }
             wilayah_ids.push(wRows[0].id);
@@ -270,10 +335,10 @@ const importUsers = async (req, res) => {
         const [inserted] = await pool.query(
           `INSERT INTO users (nama, username, password, role, pml_id, nomor_whatsapp)
            VALUES (?, ?, ?, ?, ?, ?)`,
-          [nama, email, hashed, role, pml_id, nomor_whatsapp || null]
+          [nama, email, hashed, role, pml_id, nomor_whatsapp || null],
         );
 
-        if (role === 'ppl' && wilayah_ids.length > 0) {
+        if (role === "ppl" && wilayah_ids.length > 0) {
           await syncWilayahPplId(pool, inserted.insertId, wilayah_ids);
         }
 
@@ -285,23 +350,25 @@ const importUsers = async (req, res) => {
 
     // PASS 1: admin & PML dulu
     for (const row of normalized) {
-      await processRow(row, ['admin', 'pml']);
+      await processRow(row, ["admin", "pml"]);
     }
 
     // PASS 2: PPL
     for (const row of normalized) {
-      await processRow(row, ['ppl']);
+      await processRow(row, ["ppl"]);
     }
 
     res.status(201).json({
       message: `Import selesai: ${results.berhasil} berhasil, ${results.gagal.length} gagal dari ${results.total} baris`,
       berhasil: results.berhasil,
-      gagal:    results.gagal,
-      total:    results.total
+      gagal: results.gagal,
+      total: results.total,
     });
   } catch (err) {
-    console.error('❌ importUsers ERROR:', err.message);
-    res.status(500).json({ message: 'Gagal proses file Excel', error: err.message });
+    console.error("❌ importUsers ERROR:", err.message);
+    res
+      .status(500)
+      .json({ message: "Gagal proses file Excel", error: err.message });
   }
 };
 
@@ -350,22 +417,20 @@ const getAllUsers = async (req, res) => {
       ORDER BY u.created_at ASC
     `);
 
-    const formatted = rows.map(user => ({
+    const formatted = rows.map((user) => ({
       ...user,
-      wilayah_ids:
-        user.wilayah_ids
-          ? user.wilayah_ids.split(',').map(Number)
-          : []
+      wilayah_ids: user.wilayah_ids
+        ? user.wilayah_ids.split(",").map(Number)
+        : [],
     }));
 
     res.json(formatted);
-
   } catch (err) {
-    console.error('❌ getAllUsers ERROR:', err.message);
+    console.error("❌ getAllUsers ERROR:", err.message);
 
     res.status(500).json({
-      message: 'Gagal ambil users',
-      error: err.message
+      message: "Gagal ambil users",
+      error: err.message,
     });
   }
 };
@@ -379,8 +444,10 @@ const getPMLList = async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    console.error('❌ getPMLList ERROR:', err.message);
-    res.status(500).json({ message: "Gagal ambil data PML", error: err.message });
+    console.error("❌ getPMLList ERROR:", err.message);
+    res
+      .status(500)
+      .json({ message: "Gagal ambil data PML", error: err.message });
   }
 };
 
@@ -397,8 +464,10 @@ const getPPLByPML = async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    console.error('❌ getPPLByPML ERROR:', err.message);
-    res.status(500).json({ message: "Gagal ambil data PPL", error: err.message });
+    console.error("❌ getPPLByPML ERROR:", err.message);
+    res
+      .status(500)
+      .json({ message: "Gagal ambil data PPL", error: err.message });
   }
 };
 
@@ -420,32 +489,32 @@ const getDashboardProgress = async (req, res) => {
         AND kode_sls <> ''
     `);
 
-    const totalTarget  = parseInt(targetRows[0].total_target || 0);
-    const lapanganVal  = parseInt(progressRows[0].lapangan || 0);
-    const submitVal    = parseInt(progressRows[0].submit || 0);
-    const approveVal   = parseInt(progressRows[0].approve || 0);
+    const totalTarget = parseInt(targetRows[0].total_target || 0);
+    const lapanganVal = parseInt(progressRows[0].lapangan || 0);
+    const submitVal = parseInt(progressRows[0].submit || 0);
+    const approveVal = parseInt(progressRows[0].approve || 0);
 
     const pct = (val) =>
-      totalTarget > 0
-        ? parseFloat(((val / totalTarget) * 100).toFixed(2))
-        : 0;
+      totalTarget > 0 ? parseFloat(((val / totalTarget) * 100).toFixed(2)) : 0;
 
     res.json({
-      sudahKeLapangan:          lapanganVal,
-      sudahKeLapanganPersen:    pct(lapanganVal),
+      sudahKeLapangan: lapanganVal,
+      sudahKeLapanganPersen: pct(lapanganVal),
       sudahKeLapanganChartPersen: pct(lapanganVal),
-      submit:                   submitVal,
-      submitPersen:             pct(submitVal),
-      submitChartPersen:        pct(submitVal),
-      approve:                  approveVal,
-      approvePersen:            pct(approveVal),
-      approvePersen2:           pct(approveVal),
-      target:                   totalTarget,
-      belumPersen:              parseFloat((100 - pct(approveVal)).toFixed(2)),
+      submit: submitVal,
+      submitPersen: pct(submitVal),
+      submitChartPersen: pct(submitVal),
+      approve: approveVal,
+      approvePersen: pct(approveVal),
+      approvePersen2: pct(approveVal),
+      target: totalTarget,
+      belumPersen: parseFloat((100 - pct(approveVal)).toFixed(2)),
     });
   } catch (err) {
-    console.error('❌ getDashboardProgress ERROR:', err.message);
-    res.status(500).json({ message: 'Gagal ambil progress', error: err.message });
+    console.error("❌ getDashboardProgress ERROR:", err.message);
+    res
+      .status(500)
+      .json({ message: "Gagal ambil progress", error: err.message });
   }
 };
 
@@ -465,23 +534,29 @@ const getDashboardPetugas = async (req, res) => {
       "SELECT COUNT(*) AS count FROM users WHERE role IN ('pml','ppl') AND is_logged_in = TRUE",
     );
 
-    const totalP     = parseInt(totalPetugasRow.count);
+    const totalP = parseInt(totalPetugasRow.count);
     const aktifCount = parseInt(aktifRow.count);
 
     res.json({
-      totalPetugas:       totalP,
-      totalPML:           parseInt(totalPMLRow.count),
-      totalPPL:           parseInt(totalPPLRow.count),
-      petugasAktif:       aktifCount,
-      petugasAktifPersen: totalP > 0 ? Math.round((aktifCount / totalP) * 100) : 0,
-      lastUpdate:         new Date().toLocaleString("id-ID", {
-        day: "numeric", month: "long", year: "numeric",
-        hour: "2-digit", minute: "2-digit",
+      totalPetugas: totalP,
+      totalPML: parseInt(totalPMLRow.count),
+      totalPPL: parseInt(totalPPLRow.count),
+      petugasAktif: aktifCount,
+      petugasAktifPersen:
+        totalP > 0 ? Math.round((aktifCount / totalP) * 100) : 0,
+      lastUpdate: new Date().toLocaleString("id-ID", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       }),
     });
   } catch (err) {
-    console.error('❌ getDashboardPetugas ERROR:', err.message);
-    res.status(500).json({ message: "Gagal ambil data petugas", error: err.message });
+    console.error("❌ getDashboardPetugas ERROR:", err.message);
+    res
+      .status(500)
+      .json({ message: "Gagal ambil data petugas", error: err.message });
   }
 };
 
@@ -492,31 +567,31 @@ function buildKecamatanMap(rows) {
   rows.forEach((row, idx) => {
     if (!kecamatanMap[row.kecamatan]) {
       kecamatanMap[row.kecamatan] = {
-        id:              Object.keys(kecamatanMap).length + 1,
-        nama:            row.kecamatan,
+        id: Object.keys(kecamatanMap).length + 1,
+        nama: row.kecamatan,
         sudahKeLapangan: 0,
-        submit:          0,
-        approve:         0,
-        target:          0,
-        kelurahan:       [],
+        submit: 0,
+        approve: 0,
+        target: 0,
+        kelurahan: [],
       };
     }
 
-    const kec    = kecamatanMap[row.kecamatan];
+    const kec = kecamatanMap[row.kecamatan];
     const target = parseInt(row.target || 0);
 
     kec.sudahKeLapangan += parseInt(row.sudah_ke_lapangan);
-    kec.submit          += parseInt(row.submit);
-    kec.approve         += parseInt(row.approve);
-    kec.target          += target;
+    kec.submit += parseInt(row.submit);
+    kec.approve += parseInt(row.approve);
+    kec.target += target;
 
     kec.kelurahan.push({
-      id:              idx + 1,
-      nama:            row.kelurahan,
+      id: idx + 1,
+      nama: row.kelurahan,
       sudahKeLapangan: parseInt(row.sudah_ke_lapangan),
-      submit:          parseInt(row.submit),
-      approve:         parseInt(row.approve),
-      target:          target,
+      submit: parseInt(row.submit),
+      approve: parseInt(row.approve),
+      target: target,
     });
   });
 
@@ -541,8 +616,10 @@ const getDashboardKecamatan = async (req, res) => {
     `);
     res.json(buildKecamatanMap(rows));
   } catch (err) {
-    console.error('❌ getDashboardKecamatan ERROR:', err.message);
-    res.status(500).json({ message: "Gagal ambil data kecamatan", error: err.message });
+    console.error("❌ getDashboardKecamatan ERROR:", err.message);
+    res
+      .status(500)
+      .json({ message: "Gagal ambil data kecamatan", error: err.message });
   }
 };
 
@@ -550,9 +627,11 @@ const getDashboardKecamatan = async (req, res) => {
 const getDashboardKecamatanHarian = async (req, res) => {
   try {
     const { tanggal } = req.query;
-    const targetDate  = tanggal || new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    const targetDate =
+      tanggal || new Date(Date.now() - 86400000).toISOString().split("T")[0];
 
-    const [rows] = await pool.query(`
+    const [rows] = await pool.query(
+      `
       SELECT
         w.kecamatan,
         w.kelurahan,
@@ -565,12 +644,16 @@ const getDashboardKecamatanHarian = async (req, res) => {
         ON i.wilayah_id = w.id AND i.tanggal = ?
       GROUP BY w.kecamatan, w.kelurahan
       ORDER BY w.kecamatan, w.kelurahan
-    `, [targetDate]);
+    `,
+      [targetDate],
+    );
 
     res.json(buildKecamatanMap(rows));
   } catch (err) {
-    console.error('❌ getDashboardKecamatanHarian ERROR:', err.message);
-    res.status(500).json({ message: "Gagal ambil data harian", error: err.message });
+    console.error("❌ getDashboardKecamatanHarian ERROR:", err.message);
+    res
+      .status(500)
+      .json({ message: "Gagal ambil data harian", error: err.message });
   }
 };
 
@@ -608,22 +691,25 @@ const getDashboardPetugasDetail = async (req, res) => {
 
     res.json(
       rows.map((r) => ({
-        id:              r.id,
-        nama:            r.nama,
-        tipe:            r.tipe.toUpperCase(),
-        pml_id:          r.pml_id,
+        id: r.id,
+        nama: r.nama,
+        tipe: r.tipe.toUpperCase(),
+        pml_id: r.pml_id,
         sudahKeLapangan: parseInt(r.sudah_ke_lapangan),
-        submit:          parseInt(r.submit),
-        approve:         parseInt(r.approve),
-        target:          parseInt(r.target || 0),
-        jumlahHadir:     r.tipe === "pml"
-          ? parseInt(r.jumlah_hadir_pml || 0)
-          : parseInt(r.jumlah_hadir || 0),
-      }))
+        submit: parseInt(r.submit),
+        approve: parseInt(r.approve),
+        target: parseInt(r.target || 0),
+        jumlahHadir:
+          r.tipe === "pml"
+            ? parseInt(r.jumlah_hadir_pml || 0)
+            : parseInt(r.jumlah_hadir || 0),
+      })),
     );
   } catch (err) {
-    console.error('❌ getDashboardPetugasDetail ERROR:', err.message);
-    res.status(500).json({ message: "Gagal ambil detail petugas", error: err.message });
+    console.error("❌ getDashboardPetugasDetail ERROR:", err.message);
+    res
+      .status(500)
+      .json({ message: "Gagal ambil detail petugas", error: err.message });
   }
 };
 
@@ -631,7 +717,8 @@ const getDashboardPetugasDetailHarian = async (req, res) => {
   try {
     const { tanggal } = req.query;
 
-    const [rows] = await pool.query(`
+    const [rows] = await pool.query(
+      `
       SELECT
         u.id,
         u.nama,
@@ -659,25 +746,32 @@ const getDashboardPetugasDetailHarian = async (req, res) => {
       WHERE u.role IN ('pml', 'ppl')
       GROUP BY u.id, u.nama, u.role, u.pml_id, u.target
       ORDER BY u.role, u.nama
-    `, [tanggal, tanggal]);
+    `,
+      [tanggal, tanggal],
+    );
 
     res.json(
       rows.map((r) => ({
-        id:                   r.id,
-        nama:                 r.nama,
-        tipe:                 r.tipe.toUpperCase(),
-        pml_id:               r.pml_id,
-        sudahKeLapangan:      parseInt(r.sudah_ke_lapangan),
-        submit:               parseInt(r.submit),
-        approve:              parseInt(r.approve),
-        target:               parseInt(r.target || 0),
-        hadirHariIni:         r.pml_hadir_hari_ini ? 1 : 0,
-        pmlHadirSebagaiPml:   r.pml_hadir_sebagai_pml ? 1 : 0,
-      }))
+        id: r.id,
+        nama: r.nama,
+        tipe: r.tipe.toUpperCase(),
+        pml_id: r.pml_id,
+        sudahKeLapangan: parseInt(r.sudah_ke_lapangan),
+        submit: parseInt(r.submit),
+        approve: parseInt(r.approve),
+        target: parseInt(r.target || 0),
+        hadirHariIni: r.pml_hadir_hari_ini ? 1 : 0,
+        pmlHadirSebagaiPml: r.pml_hadir_sebagai_pml ? 1 : 0,
+      })),
     );
   } catch (err) {
-    console.error('❌ getDashboardPetugasDetailHarian ERROR:', err.message);
-    res.status(500).json({ message: "Gagal ambil detail petugas harian", error: err.message });
+    console.error("❌ getDashboardPetugasDetailHarian ERROR:", err.message);
+    res
+      .status(500)
+      .json({
+        message: "Gagal ambil detail petugas harian",
+        error: err.message,
+      });
   }
 };
 
@@ -718,8 +812,10 @@ const getDashboardSebaranPetugas = async (req, res) => {
 
     res.json(rows);
   } catch (err) {
-    console.error('❌ getDashboardSebaranPetugas ERROR:', err.message);
-    res.status(500).json({ message: 'Gagal ambil sebaran petugas', error: err.message });
+    console.error("❌ getDashboardSebaranPetugas ERROR:", err.message);
+    res
+      .status(500)
+      .json({ message: "Gagal ambil sebaran petugas", error: err.message });
   }
 };
 
@@ -738,34 +834,93 @@ const getDashboardProgress15Hari = async (req, res) => {
     `);
     res.json(rows);
   } catch (err) {
-    console.error('❌ getDashboardProgress15Hari ERROR:', err.message);
-    res.status(500).json({ message: 'Gagal ambil progress harian', error: err.message });
+    console.error("❌ getDashboardProgress15Hari ERROR:", err.message);
+    res
+      .status(500)
+      .json({ message: "Gagal ambil progress harian", error: err.message });
   }
 };
 
 // ────────────────────────────────────────────────────────────────────
 // WILAYAH
 // ────────────────────────────────────────────────────────────────────
+// GET wilayah (total kumulatif — semua tanggal)
 const getWilayah = async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT
         w.*,
         pml.nama AS nama_pml,
-        us.user_id AS ppl_id_sls
+        us.user_id AS ppl_id_sls,
+        COALESCE(SUM(i.ke_lapangan), 0) AS sudah_ke_lapangan,
+        COALESCE(SUM(i.submit), 0)      AS submit,
+        COALESCE(SUM(i.approve), 0)     AS approve
       FROM wilayah w
       LEFT JOIN users pml ON w.pml_id = pml.id
       LEFT JOIN user_sls us ON us.wilayah_id = w.id
+      LEFT JOIN input_harian i ON i.wilayah_id = w.id
+      GROUP BY w.id, pml.nama, us.user_id
       ORDER BY w.kecamatan, w.kelurahan
     `);
 
-    res.json(rows.map(r => ({
-      ...r,
-      ppl_id: r.ppl_id_sls ?? r.ppl_id,
-    })));
+    res.json(
+      rows.map((r) => ({
+        ...r,
+        ppl_id: r.ppl_id_sls ?? r.ppl_id,
+        sudahKeLapangan: parseInt(r.sudah_ke_lapangan || 0),
+        submit: parseInt(r.submit || 0),
+        approve: parseInt(r.approve || 0),
+      })),
+    );
   } catch (err) {
-    console.error('❌ getWilayah ERROR:', err.message);
-    res.status(500).json({ message: 'Gagal ambil wilayah', error: err.message });
+    console.error("❌ getWilayah ERROR:", err.message);
+    res
+      .status(500)
+      .json({ message: "Gagal ambil wilayah", error: err.message });
+  }
+};
+
+// GET wilayah harian (filter berdasarkan tanggal tertentu)
+const getWilayahHarian = async (req, res) => {
+  try {
+    const { tanggal } = req.query;
+    const targetDate =
+      tanggal || new Date(Date.now() - 86400000).toISOString().split("T")[0];
+
+    const [rows] = await pool.query(
+      `
+      SELECT
+        w.*,
+        pml.nama AS nama_pml,
+        us.user_id AS ppl_id_sls,
+        COALESCE(SUM(i.ke_lapangan), 0) AS sudah_ke_lapangan,
+        COALESCE(SUM(i.submit), 0)      AS submit,
+        COALESCE(SUM(i.approve), 0)     AS approve
+      FROM wilayah w
+      LEFT JOIN users pml ON w.pml_id = pml.id
+      LEFT JOIN user_sls us ON us.wilayah_id = w.id
+      LEFT JOIN input_harian i
+        ON i.wilayah_id = w.id AND i.tanggal = ?
+      GROUP BY w.id, pml.nama, us.user_id
+      ORDER BY w.kecamatan, w.kelurahan
+    `,
+      [targetDate],
+    );
+
+    res.json(
+      rows.map((r) => ({
+        ...r,
+        ppl_id: r.ppl_id_sls ?? r.ppl_id,
+        sudahKeLapangan: parseInt(r.sudah_ke_lapangan || 0),
+        submit: parseInt(r.submit || 0),
+        approve: parseInt(r.approve || 0),
+      })),
+    );
+  } catch (err) {
+    console.error("❌ getWilayahHarian ERROR:", err.message);
+    res
+      .status(500)
+      .json({ message: "Gagal ambil wilayah harian", error: err.message });
   }
 };
 
@@ -775,12 +930,21 @@ const createWilayah = async (req, res) => {
     await pool.query(
       `INSERT INTO wilayah (kode_sls, kecamatan, kelurahan, pml_id, ppl_id, target)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [kode_sls || null, kecamatan, kelurahan, pml_id || null, ppl_id || null, Number(target) || 0]
+      [
+        kode_sls || null,
+        kecamatan,
+        kelurahan,
+        pml_id || null,
+        ppl_id || null,
+        Number(target) || 0,
+      ],
     );
-    res.json({ message: 'Wilayah berhasil ditambahkan' });
+    res.json({ message: "Wilayah berhasil ditambahkan" });
   } catch (err) {
-    console.error('❌ createWilayah ERROR:', err.message);
-    res.status(500).json({ message: 'Gagal tambah wilayah', error: err.message });
+    console.error("❌ createWilayah ERROR:", err.message);
+    res
+      .status(500)
+      .json({ message: "Gagal tambah wilayah", error: err.message });
   }
 };
 
@@ -793,79 +957,104 @@ const updateWilayah = async (req, res) => {
        SET kode_sls = ?, kecamatan = ?, kelurahan = ?,
            pml_id = ?, ppl_id = ?, target = ?
        WHERE id = ?`,
-      [kode_sls || null, kecamatan, kelurahan, pml_id || null, ppl_id || null, Number(target) || 0, id]
+      [
+        kode_sls || null,
+        kecamatan,
+        kelurahan,
+        pml_id || null,
+        ppl_id || null,
+        Number(target) || 0,
+        id,
+      ],
     );
-    res.json({ message: 'Wilayah berhasil diupdate' });
+    res.json({ message: "Wilayah berhasil diupdate" });
   } catch (err) {
-    console.error('❌ updateWilayah ERROR:', err.message);
-    res.status(500).json({ message: 'Gagal update wilayah', error: err.message });
+    console.error("❌ updateWilayah ERROR:", err.message);
+    res
+      .status(500)
+      .json({ message: "Gagal update wilayah", error: err.message });
   }
 };
 
 const deleteWilayah = async (req, res) => {
   const { id } = req.params;
   try {
-    await pool.query('DELETE FROM wilayah WHERE id = ?', [id]);
-    res.json({ message: 'Wilayah berhasil dihapus' });
+    await pool.query("DELETE FROM wilayah WHERE id = ?", [id]);
+    res.json({ message: "Wilayah berhasil dihapus" });
   } catch (err) {
-    console.error('❌ deleteWilayah ERROR:', err.message);
-    res.status(500).json({ message: 'Gagal hapus wilayah', error: err.message });
+    console.error("❌ deleteWilayah ERROR:", err.message);
+    res
+      .status(500)
+      .json({ message: "Gagal hapus wilayah", error: err.message });
   }
 };
 
 const deleteWilayahBulk = async (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
-    return res.status(400).json({ message: 'IDs tidak boleh kosong' });
+    return res.status(400).json({ message: "IDs tidak boleh kosong" });
   }
   try {
-    const placeholders = ids.map(() => '?').join(',');
+    const placeholders = ids.map(() => "?").join(",");
     await pool.query(`DELETE FROM wilayah WHERE id IN (${placeholders})`, ids);
     res.json({ message: `${ids.length} wilayah berhasil dihapus` });
   } catch (err) {
-    console.error('❌ deleteWilayahBulk ERROR:', err.message);
-    res.status(500).json({ message: 'Gagal hapus bulk wilayah', error: err.message });
+    console.error("❌ deleteWilayahBulk ERROR:", err.message);
+    res
+      .status(500)
+      .json({ message: "Gagal hapus bulk wilayah", error: err.message });
   }
 };
 
 const importWilayah = async (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ message: 'File Excel tidak ditemukan' });
+    return res.status(400).json({ message: "File Excel tidak ditemukan" });
   }
 
   try {
-    const workbook  = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
-    const sheet     = workbook.Sheets[sheetName];
-    const rows      = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    const sheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
     if (rows.length === 0) {
-      return res.status(400).json({ message: 'File Excel kosong' });
+      return res.status(400).json({ message: "File Excel kosong" });
     }
 
     const results = { berhasil: 0, dilewati: 0, gagal: [], total: rows.length };
 
     const normalized = rows.map((row) => ({
-      kecamatan: String(row['kecamatan'] || row['Kecamatan'] || '').trim(),
-      kelurahan: String(row['kelurahan'] || row['Kelurahan'] || '').trim(),
-      kode_sls:  String(row['kode_sls']  || row['Kode SLS']  || row['kode SLS'] || '').trim(),
-      target:    Number(row['target']    || row['Target']    || 0),
+      kecamatan: String(row["kecamatan"] || row["Kecamatan"] || "").trim(),
+      kelurahan: String(row["kelurahan"] || row["Kelurahan"] || "").trim(),
+      kode_sls: String(
+        row["kode_sls"] || row["Kode SLS"] || row["kode SLS"] || "",
+      ).trim(),
+      target: Number(row["target"] || row["Target"] || 0),
     }));
 
     for (const row of normalized) {
       const { kecamatan, kelurahan, kode_sls, target } = row;
 
       if (!kecamatan) {
-        results.gagal.push({ baris: kelurahan || '?', alasan: 'kolom kecamatan wajib diisi' });
+        results.gagal.push({
+          baris: kelurahan || "?",
+          alasan: "kolom kecamatan wajib diisi",
+        });
         continue;
       }
       if (!kode_sls) {
-        results.gagal.push({ baris: `${kelurahan}/${kecamatan}`, alasan: 'kolom kode_sls wajib diisi' });
+        results.gagal.push({
+          baris: `${kelurahan}/${kecamatan}`,
+          alasan: "kolom kode_sls wajib diisi",
+        });
         continue;
       }
 
       try {
-        const [cekRows] = await pool.query('SELECT id FROM wilayah WHERE kode_sls = ?', [kode_sls]);
+        const [cekRows] = await pool.query(
+          "SELECT id FROM wilayah WHERE kode_sls = ?",
+          [kode_sls],
+        );
         if (cekRows.length > 0) {
           results.dilewati++;
           continue;
@@ -874,7 +1063,7 @@ const importWilayah = async (req, res) => {
         await pool.query(
           `INSERT INTO wilayah (kecamatan, kelurahan, kode_sls, target)
            VALUES (?, ?, ?, ?)`,
-          [kecamatan, kelurahan || '', kode_sls, target]
+          [kecamatan, kelurahan || "", kode_sls, target],
         );
         results.berhasil++;
       } catch (rowErr) {
@@ -886,12 +1075,14 @@ const importWilayah = async (req, res) => {
       message: `Import selesai: ${results.berhasil} berhasil, ${results.dilewati} dilewati (duplikat), ${results.gagal.length} gagal dari ${results.total} baris`,
       berhasil: results.berhasil,
       dilewati: results.dilewati,
-      gagal:    results.gagal,
-      total:    results.total,
+      gagal: results.gagal,
+      total: results.total,
     });
   } catch (err) {
-    console.error('❌ importWilayah ERROR:', err.message);
-    res.status(500).json({ message: 'Gagal proses file Excel', error: err.message });
+    console.error("❌ importWilayah ERROR:", err.message);
+    res
+      .status(500)
+      .json({ message: "Gagal proses file Excel", error: err.message });
   }
 };
 
@@ -905,6 +1096,7 @@ module.exports = {
   getPMLList,
   getPPLByPML,
   getWilayah,
+  getWilayahHarian,
   createWilayah,
   updateWilayah,
   deleteWilayah,

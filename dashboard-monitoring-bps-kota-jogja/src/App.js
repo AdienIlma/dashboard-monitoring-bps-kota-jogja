@@ -25,6 +25,7 @@ import {
   getPetugasDetail,
   getPetugasDetailHarian,
   getWilayahData,
+  getWilayahHarianData
 } from "./services/dataService";
 import axios from "axios";
 
@@ -256,20 +257,23 @@ function AdminDashboard() {
   const [petugasHarianData, setPetugasHarianData] = useState([]);
   const [wilayahList, setWilayahList] = useState([]);
   const [showNavbar, setShowNavbar] = useState(false);
+  const [wilayahHarianList, setWilayahHarianList] = useState([]);
 
   const stableLogout = useCallback(() => logout(), [logout]);
 
   useEffect(() => {
     const fetchHarian = async () => {
       try {
-        const [harianKecamatan, harianPetugas, detailTotal] = await Promise.all([
+        const [harianKecamatan, harianPetugas, detailTotal, wilayahHarian] = await Promise.all([
           getKecamatanHarianData(tanggalHarian),
           getPetugasDetailHarian(tanggalHarian),
           getPetugasDetail(),
+          getWilayahHarianData(tanggalHarian),
         ]);
         setKecamatanHarianData(harianKecamatan);
         setPetugasHarianData(harianPetugas);
         setPetugasDetailData(detailTotal);
+        setWilayahHarianList(wilayahHarian);
       } catch (err) {
         console.error("Gagal fetch harian:", err);
       }
@@ -370,6 +374,7 @@ function AdminDashboard() {
               tanggalHarian={tanggalHarian}
               onTanggalChange={setTanggalHarian}
               wilayahData={wilayahList}
+              wilayahHarianData={wilayahHarianList}
             />
           </div>
         </div>

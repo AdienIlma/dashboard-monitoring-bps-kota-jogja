@@ -16,6 +16,7 @@ const {
 
   // wilayah
   getWilayah,
+  getWilayahHarian,
   createWilayah,
   updateWilayah,
   deleteWilayah,
@@ -49,6 +50,7 @@ router.delete("/users/:id",                deleteUser);
 
 //WILAYAH MANAGEMENT
 router.get   ("/wilayah",                  getWilayah);
+router.get('/wilayah/harian', getWilayahHarian);
 router.post  ("/wilayah",                  createWilayah);
 router.post  ("/wilayah/import",           upload.single("file"), importWilayah);
 router.delete("/wilayah/bulk",             deleteWilayahBulk);
