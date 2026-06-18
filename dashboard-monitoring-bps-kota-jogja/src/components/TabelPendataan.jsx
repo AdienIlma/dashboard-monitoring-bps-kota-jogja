@@ -10,7 +10,6 @@ const TabelPendataan = ({
   const [activeTab, setActiveTab] = useState("total");
   const [search, setSearch] = useState("");
   const [expandedKec, setExpandedKec] = useState(null);
-  // Sorting kolom (Target / Lapangan / Submit / Approve)
   const [sortConfig, setSortConfig] = useState({
     key: null,
     direction: "desc",
@@ -21,7 +20,6 @@ const TabelPendataan = ({
 
   const toggleKec = (id) => setExpandedKec(expandedKec === id ? null : id);
 
-  // Klik header kolom: kalau kolom yang sama, toggle arah; kalau beda, mulai dari desc
   const handleSort = (key) => {
     setSortConfig((prev) => {
       if (prev.key === key) {
@@ -31,7 +29,6 @@ const TabelPendataan = ({
     });
   };
 
-  // Urutkan array (kecamatan ataupun kelurahan) berdasarkan sortConfig aktif
   const sortData = (arr) => {
     if (!sortConfig.key) return arr;
     const { key, direction } = sortConfig;
@@ -56,7 +53,6 @@ const TabelPendataan = ({
     return acc;
   }, []);
 
-  // Urutkan daftar kecamatan sesuai sort yang aktif
   const sortedFiltered = sortData(filtered);
 
   const headerStyle = {
@@ -78,7 +74,6 @@ const TabelPendataan = ({
     textAlign: "right",
   };
 
-  // Ikon panah sort: netral (belum aktif) atau menunjukkan arah aktif
   const SortIcon = ({ active, direction }) => (
     <svg
       width="9"
@@ -124,7 +119,6 @@ const TabelPendataan = ({
     </svg>
   );
 
-  // Header kolom yang bisa diklik untuk sorting
   const renderSortableHeader = (label, key) => {
     const active = sortConfig.key === key;
     return (
@@ -160,57 +154,98 @@ const TabelPendataan = ({
     );
   };
 
+  // ====== EXPORT EXCEL — disesuaikan agar tampil seperti contoh gambar ======
+  // Kolom: Kecamatan | Kelurahan | Target | Lapangan | Submit | Approve
+  // Baris kecamatan: kolom A terisi nama kecamatan (bold), kolom B kosong.
+  // Baris kelurahan: kolom A kosong, kolom B terisi nama kelurahan (indented).
   const handleDownloadExcel = () => {
-    const buildSheet = (data) => {
+    const buildSheetData = (data) => {
       const rows = [
-        ["Wilayah", "Level", "Target", "Lapangan", "Submit", "Approve"],
+        ["Kecamatan", "Kelurahan", "Target", "Lapangan", "Submit", "Approve"],
       ];
+      const kecamatanRowIndexes = [];
+
       (data || []).forEach((kec) => {
+        const kelList = (kec.kelurahan || []).filter(
+          (kel) => kel.nama && kel.nama.trim() !== "",
+        );
+
+        kecamatanRowIndexes.push(rows.length);
         rows.push([
           kec.nama,
-          "Kecamatan",
+          "",
           kec.target || 0,
           kec.sudahKeLapangan || 0,
           kec.submit || 0,
           kec.approve || 0,
         ]);
-        (kec.kelurahan || [])
-          .filter(
-            (kel) =>
-              kel.nama && kel.nama.trim() !== "" && kel.nama !== kec.nama,
-          )
-          .forEach((kel) => {
-            rows.push([
-              kel.nama,
-              "Kelurahan",
-              kel.target || 0,
-              kel.sudahKeLapangan || 0,
-              kel.submit || 0,
-              kel.approve || 0,
-            ]);
-          });
+
+        kelList.forEach((kel) => {
+          rows.push([
+            "",
+            "    " + kel.nama,
+            kel.target || 0,
+            kel.sudahKeLapangan || 0,
+            kel.submit || 0,
+            kel.approve || 0,
+          ]);
+        });
       });
-      return rows;
+
+      return { rows, kecamatanRowIndexes };
+    };
+
+    const applySheetStyle = (ws, kecamatanRowIndexes) => {
+      const range = XLSX.utils.decode_range(ws["!ref"]);
+
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const addr = XLSX.utils.encode_cell({ r: 0, c });
+        if (!ws[addr]) continue;
+        ws[addr].s = {
+          font: { bold: true, color: { rgb: "FFFFFF" } },
+          fill: { fgColor: { rgb: "003366" } },
+          alignment: { horizontal: "center", vertical: "center" },
+        };
+      }
+
+      kecamatanRowIndexes.forEach((rowIdx) => {
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          const addr = XLSX.utils.encode_cell({ r: rowIdx, c });
+          if (!ws[addr]) continue;
+          ws[addr].s = {
+            font: { bold: true },
+            fill: { fgColor: { rgb: "F0F2F5" } },
+          };
+        }
+      });
     };
 
     const wb = XLSX.utils.book_new();
 
-    const wsTotal = XLSX.utils.aoa_to_sheet(buildSheet(kecamatanData));
+    const { rows: rowsTotal, kecamatanRowIndexes: idxTotal } =
+      buildSheetData(kecamatanData);
+    const wsTotal = XLSX.utils.aoa_to_sheet(rowsTotal);
     wsTotal["!cols"] = [
-      { wch: 28 },
-      { wch: 12 },
+      { wch: 22 },
+      { wch: 22 },
       { wch: 9 },
       { wch: 11 },
       { wch: 9 },
       { wch: 9 },
     ];
+    applySheetStyle(wsTotal, idxTotal);
     XLSX.utils.book_append_sheet(wb, wsTotal, "Data Total");
 
-    const wsHarian = XLSX.utils.aoa_to_sheet(buildSheet(kecamatanHarianData));
+    const { rows: rowsHarian, kecamatanRowIndexes: idxHarian } =
+      buildSheetData(kecamatanHarianData);
+    const wsHarian = XLSX.utils.aoa_to_sheet(rowsHarian);
     wsHarian["!cols"] = wsTotal["!cols"];
+    applySheetStyle(wsHarian, idxHarian);
     XLSX.utils.book_append_sheet(wb, wsHarian, `Harian ${tanggalHarian}`);
 
-    XLSX.writeFile(wb, `tabel_pendataan_${tanggalHarian}.xlsx`);
+    XLSX.writeFile(wb, `tabel_pendataan_${tanggalHarian}.xlsx`, {
+      cellStyles: true,
+    });
   };
 
   return (
@@ -233,7 +268,7 @@ const TabelPendataan = ({
           paddingBottom: 10,
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between", // ← tambahan
+          justifyContent: "space-between",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -266,7 +301,6 @@ const TabelPendataan = ({
         </button>
       </div>
 
-      {/* Tab */}
       <div
         style={{
           display: "flex",
@@ -412,10 +446,7 @@ const TabelPendataan = ({
                 const isExpanded = expandedKec === kec.id || kec._autoExpand;
                 const kelurahanList = sortData(
                   kec.kelurahan.filter(
-                    (kel) =>
-                      kel.nama &&
-                      kel.nama.trim() !== "" &&
-                      kel.nama !== kec.nama,
+                    (kel) => kel.nama && kel.nama.trim() !== "",
                   ),
                 );
                 return (

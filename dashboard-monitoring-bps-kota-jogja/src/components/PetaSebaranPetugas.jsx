@@ -843,35 +843,38 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
   const [filterPML, setFilterPML] = useState("");
   const [search, setSearch] = useState("");
   const [flyTarget, setFlyTarget] = useState(null);
+  const [showOnlinePPLList, setShowOnlinePPLList] = useState(false);
+  const [showOnlinePMLList, setShowOnlinePMLList] = useState(false);
+  const [showOfflinePMLList, setShowOfflinePMLList] = useState(false);
 
   // ── FIX: normalize lat/lng ke number saat data masuk ──────────────────
   const fetchData = useCallback(async () => {
-  setIsRefreshing(true);
-  try {
-    const data = await getSebaranPetugas();
-    
-    // Dedup by id — ambil baris pertama tiap user
-    const seen = new Set();
-    const deduped = data.filter((p) => {
-      if (seen.has(p.id)) return false;
-      seen.add(p.id);
-      return true;
-    });
-    
-    const normalized = deduped.map((p) => ({
-      ...p,
-      lat: p.lat != null && p.lat !== "" ? parseFloat(p.lat) : null,
-      lng: p.lng != null && p.lng !== "" ? parseFloat(p.lng) : null,
-    }));
-    
-    setSebaranData(normalized);
-    setLastUpdate(new Date());
-  } catch (err) {
-    console.error("Gagal ambil sebaran:", err);
-  } finally {
-    setIsRefreshing(false);
-  }
-}, []);
+    setIsRefreshing(true);
+    try {
+      const data = await getSebaranPetugas();
+
+      // Dedup by id — ambil baris pertama tiap user
+      const seen = new Set();
+      const deduped = data.filter((p) => {
+        if (seen.has(p.id)) return false;
+        seen.add(p.id);
+        return true;
+      });
+
+      const normalized = deduped.map((p) => ({
+        ...p,
+        lat: p.lat != null && p.lat !== "" ? parseFloat(p.lat) : null,
+        lng: p.lng != null && p.lng !== "" ? parseFloat(p.lng) : null,
+      }));
+
+      setSebaranData(normalized);
+      setLastUpdate(new Date());
+    } catch (err) {
+      console.error("Gagal ambil sebaran:", err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -1036,6 +1039,15 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
     }
   };
 
+  const onlinePPLDetail = pplList
+    .filter((p) => p.online)
+    .map((p) => ({
+      ...p,
+      pmlNama: pmlList.find((pml) => pml.id === p.pml_id)?.nama || "—",
+    }));
+
+  const onlinePMLDetail = pmlList.filter((p) => p.online);
+
   if (detailPetugas) {
     return (
       <DetailPetugas
@@ -1049,7 +1061,14 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, height: "100%" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        height: "100%",
+      }}
+    >
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       {/* Header */}
       <div
@@ -1261,36 +1280,136 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
         <span style={{ fontSize: 10, color: "#7A8899", fontWeight: 500 }}>
           Keterangan:
         </span>
-        {[
-          { label: `PML Online (${pmlOnline})`, color: "#003366" },
-          {
-            label: `PML Offline (${pmlList.length - pmlOnline})`,
-            color: "#9AA5B4",
-          },
-          { label: `PPL Online (${pplOnline})`, color: "#E8702A" },
-        ].map(({ label, color }) => (
+        <span
+          onClick={() => setShowOnlinePMLList((v) => !v)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 3,
+            fontSize: 10,
+            color: "#003366",
+            cursor: "pointer",
+            userSelect: "none",
+          }}
+        >
           <span
-            key={label}
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 3,
-              fontSize: 10,
-              color,
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              background: "#003366",
+              display: "inline-block",
+            }}
+          />
+          PML Online ({pmlOnline})
+          <svg
+            width="8"
+            height="8"
+            viewBox="0 0 10 10"
+            fill="none"
+            style={{
+              marginLeft: 2,
+              transform: showOnlinePMLList ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform .15s",
             }}
           >
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: "50%",
-                background: color,
-                display: "inline-block",
-              }}
+            <path
+              d="M2 3.5L5 6.5L8 3.5"
+              stroke="#003366"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
-            {label}
-          </span>
-        ))}
+          </svg>
+        </span>
+
+        <span
+          onClick={() => setShowOfflinePMLList((v) => !v)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 3,
+            fontSize: 10,
+            color: "#9AA5B4",
+            cursor: "pointer",
+            userSelect: "none",
+          }}
+        >
+          <span
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              background: "#9AA5B4",
+              display: "inline-block",
+            }}
+          />
+          PML Offline ({pmlList.length - pmlOnline})
+          <svg
+            width="8"
+            height="8"
+            viewBox="0 0 10 10"
+            fill="none"
+            style={{
+              marginLeft: 2,
+              transform: showOfflinePMLList ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform .15s",
+            }}
+          >
+            <path
+              d="M2 3.5L5 6.5L8 3.5"
+              stroke="#9AA5B4"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+
+        {/* PPL Online — sekarang clickable */}
+        <span
+          onClick={() => setShowOnlinePPLList((v) => !v)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 3,
+            fontSize: 10,
+            color: "#E8702A",
+            cursor: "pointer",
+            userSelect: "none",
+          }}
+        >
+          <span
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              background: "#E8702A",
+              display: "inline-block",
+            }}
+          />
+          PPL Online ({pplOnline})
+          <svg
+            width="8"
+            height="8"
+            viewBox="0 0 10 10"
+            fill="none"
+            style={{
+              marginLeft: 2,
+              transform: showOnlinePPLList ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform .15s",
+            }}
+          >
+            <path
+              d="M2 3.5L5 6.5L8 3.5"
+              stroke="#E8702A"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+
         {selectedPML && (
           <span
             style={{
@@ -1321,17 +1440,268 @@ const PetaSebaranPetugas = ({ wilayahData }) => {
         )}
       </div>
 
-
-      {/* Map */}
+      {showOnlinePMLList && (
         <div
           style={{
+            background: "white",
             borderRadius: 12,
-            overflow: "hidden",
             border: "1px solid #EBEEf2",
-            height: 380,   // ← fixed height, sesuaikan angkanya
-            flexShrink: 0,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+            padding: 12,
           }}
         >
+          <div style={sectionTitle}>
+            Daftar PML Online ({onlinePMLDetail.length})
+          </div>
+          {onlinePMLDetail.length === 0 ? (
+            <p
+              style={{
+                color: "#B0BAC6",
+                fontSize: 12,
+                textAlign: "center",
+                padding: "8px 0",
+              }}
+            >
+              Tidak ada PML online
+            </p>
+          ) : (
+            <div
+              style={{
+                overflowX: "auto",
+                maxHeight: 240,
+                overflowY: "auto",
+                borderRadius: 8,
+                border: "1px solid #EBEEf2",
+              }}
+            >
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead style={{ position: "sticky", top: 0 }}>
+                  <tr>
+                    {["Nama PML", "Nomor"].map((h) => (
+                      <th key={h} style={thStyle}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {onlinePMLDetail.map((pml, idx) => (
+                    <tr
+                      key={pml.id}
+                      style={{
+                        background: idx % 2 === 0 ? "white" : "#F7F8FA",
+                      }}
+                    >
+                      <td style={tdStyle}>
+                        <span
+                          style={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 20,
+                            backgroundColor: "#EEF5FF",
+                            color: "#003366",
+                            border: "1px solid #C7DEFF",
+                            marginRight: 6,
+                          }}
+                        >
+                          PML
+                        </span>
+                        <span onClick={() => openDetail(pml)} style={linkStyle}>
+                          {pml.nama}
+                        </span>
+                      </td>
+                      <td style={tdStyle}>
+                        {pml.nomor_whatsapp ? `${pml.nomor_whatsapp}` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {showOfflinePMLList && (
+        <div
+          style={{
+            background: "white",
+            borderRadius: 12,
+            border: "1px solid #EBEEf2",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+            padding: 12,
+          }}
+        >
+          <div style={sectionTitle}>
+            Daftar PML Offline ({pmlList.filter((p) => !p.online).length})
+          </div>
+          {pmlList.filter((p) => !p.online).length === 0 ? (
+            <p
+              style={{
+                color: "#B0BAC6",
+                fontSize: 12,
+                textAlign: "center",
+                padding: "8px 0",
+              }}
+            >
+              Semua PML sedang online
+            </p>
+          ) : (
+            <div
+              style={{
+                overflowX: "auto",
+                maxHeight: 240,
+                overflowY: "auto",
+                borderRadius: 8,
+                border: "1px solid #EBEEf2",
+              }}
+            >
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead style={{ position: "sticky", top: 0 }}>
+                  <tr>
+                    {["Nama PML", "Nomor Whatsapp"].map((h) => (
+                      <th key={h} style={thStyle}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pmlList
+                    .filter((p) => !p.online)
+                    .map((pml, idx) => (
+                      <tr
+                        key={pml.id}
+                        style={{
+                          background: idx % 2 === 0 ? "white" : "#F7F8FA",
+                        }}
+                      >
+                        <td style={tdStyle}>
+                          <span
+                            style={{
+                              fontSize: 9,
+                              fontWeight: 700,
+                              padding: "1px 6px",
+                              borderRadius: 20,
+                              backgroundColor: "#F7F8FA",
+                              color: "#9AA5B4",
+                              border: "1px solid #EBEEf2",
+                              marginRight: 6,
+                            }}
+                          >
+                            PML
+                          </span>
+                          <span
+                            onClick={() => openDetail(pml)}
+                            style={linkStyle}
+                          >
+                            {pml.nama}
+                          </span>
+                        </td>
+                        <td style={{ ...tdStyle, color: "#B0BAC6" }}>
+                          {pml.nomor_whatsapp ? `${pml.nomor_whatsapp}` : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {showOnlinePPLList && (
+        <div
+          style={{
+            background: "white",
+            borderRadius: 12,
+            border: "1px solid #EBEEf2",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+            padding: 12,
+          }}
+        >
+          <div style={sectionTitle}>
+            Daftar PPL Online ({onlinePPLDetail.length})
+          </div>
+          {onlinePPLDetail.length === 0 ? (
+            <p
+              style={{
+                color: "#B0BAC6",
+                fontSize: 12,
+                textAlign: "center",
+                padding: "8px 0",
+              }}
+            >
+              Tidak ada PPL online
+            </p>
+          ) : (
+            <div
+              style={{
+                overflowX: "auto",
+                maxHeight: 240,
+                overflowY: "auto",
+                borderRadius: 8,
+                border: "1px solid #EBEEf2",
+              }}
+            >
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead style={{ position: "sticky", top: 0 }}>
+                  <tr>
+                    {["Nama PPL", "PML Pengawas"].map((h) => (
+                      <th key={h} style={thStyle}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {onlinePPLDetail.map((ppl, idx) => (
+                    <tr
+                      key={ppl.id}
+                      style={{
+                        background: idx % 2 === 0 ? "white" : "#F7F8FA",
+                      }}
+                    >
+                      <td style={tdStyle}>
+                        <span
+                          style={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 20,
+                            backgroundColor: "#FFF3EC",
+                            color: "#E8702A",
+                            border: "1px solid #FDDCBF",
+                            marginRight: 6,
+                          }}
+                        >
+                          PPL
+                        </span>
+                        <span onClick={() => openDetail(ppl)} style={linkStyle}>
+                          {ppl.nama}
+                        </span>
+                      </td>
+                      <td style={tdStyle}>{ppl.pmlNama}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Map */}
+      <div
+        style={{
+          borderRadius: 12,
+          overflow: "hidden",
+          border: "1px solid #EBEEf2",
+          height: 380, // ← fixed height, sesuaikan angkanya
+          flexShrink: 0,
+        }}
+      >
         <MapContainer
           center={[-7.801389, 110.364444]}
           zoom={13}

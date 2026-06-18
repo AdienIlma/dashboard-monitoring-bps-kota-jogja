@@ -603,16 +603,24 @@ const getDashboardKecamatan = async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT
-        w.kecamatan,
-        w.kelurahan,
-        SUM(w.target) AS target,
-        COALESCE(SUM(i.ke_lapangan), 0) AS sudah_ke_lapangan,
-        COALESCE(SUM(i.submit), 0)      AS submit,
-        COALESCE(SUM(i.approve), 0)     AS approve
-      FROM wilayah w
-      LEFT JOIN input_harian i ON i.wilayah_id = w.id
-      GROUP BY w.kecamatan, w.kelurahan
-      ORDER BY w.kecamatan, w.kelurahan
+  w.kecamatan,
+  w.kelurahan,
+  SUM(w.target) AS target,
+  COALESCE(SUM(ih.ke_lapangan), 0) AS sudah_ke_lapangan,
+  COALESCE(SUM(ih.submit), 0)      AS submit,
+  COALESCE(SUM(ih.approve), 0)     AS approve
+FROM wilayah w
+LEFT JOIN (
+  SELECT
+    wilayah_id,
+    SUM(ke_lapangan) AS ke_lapangan,
+    SUM(submit)      AS submit,
+    SUM(approve)     AS approve
+  FROM input_harian
+  GROUP BY wilayah_id
+) ih ON ih.wilayah_id = w.id
+GROUP BY w.kecamatan, w.kelurahan
+ORDER BY w.kecamatan, w.kelurahan
     `);
     res.json(buildKecamatanMap(rows));
   } catch (err) {
@@ -633,17 +641,25 @@ const getDashboardKecamatanHarian = async (req, res) => {
     const [rows] = await pool.query(
       `
       SELECT
-        w.kecamatan,
-        w.kelurahan,
-        SUM(w.target) AS target,
-        COALESCE(SUM(i.ke_lapangan), 0) AS sudah_ke_lapangan,
-        COALESCE(SUM(i.submit), 0)      AS submit,
-        COALESCE(SUM(i.approve), 0)     AS approve
-      FROM wilayah w
-      LEFT JOIN input_harian i
-        ON i.wilayah_id = w.id AND i.tanggal = ?
-      GROUP BY w.kecamatan, w.kelurahan
-      ORDER BY w.kecamatan, w.kelurahan
+  w.kecamatan,
+  w.kelurahan,
+  SUM(w.target) AS target,
+  COALESCE(SUM(ih.ke_lapangan), 0) AS sudah_ke_lapangan,
+  COALESCE(SUM(ih.submit), 0)      AS submit,
+  COALESCE(SUM(ih.approve), 0)     AS approve
+FROM wilayah w
+LEFT JOIN (
+  SELECT
+    wilayah_id,
+    SUM(ke_lapangan) AS ke_lapangan,
+    SUM(submit)      AS submit,
+    SUM(approve)     AS approve
+  FROM input_harian
+  WHERE tanggal = ?
+  GROUP BY wilayah_id
+) ih ON ih.wilayah_id = w.id
+GROUP BY w.kecamatan, w.kelurahan
+ORDER BY w.kecamatan, w.kelurahan
     `,
       [targetDate],
     );
@@ -766,12 +782,10 @@ const getDashboardPetugasDetailHarian = async (req, res) => {
     );
   } catch (err) {
     console.error("❌ getDashboardPetugasDetailHarian ERROR:", err.message);
-    res
-      .status(500)
-      .json({
-        message: "Gagal ambil detail petugas harian",
-        error: err.message,
-      });
+    res.status(500).json({
+      message: "Gagal ambil detail petugas harian",
+      error: err.message,
+    });
   }
 };
 
