@@ -7,6 +7,7 @@ const {
   kirimLokasi,
   editInput,
   hapusInput,
+  getWilayahPPL
 } = require("../controllers/pplController");
 
 router.use(authenticate, authorize("ppl"));
@@ -16,5 +17,6 @@ router.post("/input", inputHarian);
 router.post("/lokasi", kirimLokasi);
 router.put("/input/:input_id", editInput);
 router.delete("/input/:input_id", hapusInput);
+router.get('/wilayah', getWilayahPPL);
 
 module.exports = router;

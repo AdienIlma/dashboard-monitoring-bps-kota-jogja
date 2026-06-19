@@ -55,7 +55,7 @@ const DashboardPPL = () => {
   const fetchAll = async () => {
     try {
       const [w, i] = await Promise.all([
-        api.get("/wilayah"),
+        api.get("/ppl/wilayah"),
         api.get("/ppl/inputs"),
       ]);
       setWilayah(w.data);
@@ -97,20 +97,19 @@ const DashboardPPL = () => {
     );
   };
 
-  const isSLSPenuh = (w) => {
-    if (!w.target || parseInt(w.target) <= 0) return false;
-    const target = parseInt(w.target);
-    if (activeMenu === "lapangan")
-      return parseInt(w.total_lapangan || 0) >= target;
-    if (activeMenu === "submit") return parseInt(w.total_submit || 0) >= target;
-    return false;
-  };
+const isSLSPenuh = (w) => {
+  if (!w.target || parseInt(w.target) <= 0) return false;
+  const target = parseInt(w.target);
+  if (activeMenu === "lapangan") return parseInt(w.total_lapangan || 0) >= target;
+  if (activeMenu === "submit")   return parseInt(w.total_submit   || 0) >= target;
+  return false;
+};
 
-  const getProgres = (w) => {
-    if (activeMenu === "lapangan") return parseInt(w.total_lapangan || 0);
-    if (activeMenu === "submit") return parseInt(w.total_submit || 0);
-    return 0;
-  };
+const getProgres = (w) => {
+  if (activeMenu === "lapangan") return parseInt(w.total_lapangan || 0);
+  if (activeMenu === "submit")   return parseInt(w.total_submit   || 0);
+  return 0;
+};
 
   const handlePilihSLS = (w) => {
     if (isSLSPenuh(w)) return;
@@ -188,17 +187,17 @@ const DashboardPPL = () => {
       return;
     }
 
-    if (selectedSLS && selectedSLS.target > 0) {
-      const progres = getProgres(selectedSLS);
-      const sisa = parseInt(selectedSLS.target) - progres;
-      if (nilai[activeMenu] > sisa) {
-        setPesan({
-          text: `Jumlah melebihi sisa target! Sisa: ${sisa}`,
-          type: "error",
-        });
-        return;
-      }
-    }
+    // if (selectedSLS && selectedSLS.target > 0) {
+    //   const progres = getProgres(selectedSLS);
+    //   const sisa = parseInt(selectedSLS.target) - progres;
+    //   if (nilai[activeMenu] > sisa) {
+    //     setPesan({
+    //       text: `Jumlah melebihi sisa target! Sisa: ${sisa}`,
+    //       type: "error",
+    //     });
+    //     return;
+    //   }
+    // }
 
     setSubmitLoading(true);
     setPesan({ text: "", type: "" });

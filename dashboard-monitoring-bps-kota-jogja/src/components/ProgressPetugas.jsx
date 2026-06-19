@@ -840,12 +840,20 @@ const ProgressPetugas = ({
       ]);
 
       pplDibawah.forEach((ppl) => {
-        // Baris PPL
+        // Semua SLS milik PPL ini
+        const slsMilikPPL = slsArr.filter((s) => s.ppl_id === ppl.id);
+
+        // Kecamatan PPL diambil dari SLS-SLS di bawahnya (biasanya cuma 1 kecamatan)
+        const kecamatanPPL = [
+          ...new Set(slsMilikPPL.map((s) => s.kecamatan).filter(Boolean)),
+        ].join(", ");
+
+        // Baris PPL (ringkasan)
         rows.push([
           "PPL",
           ppl.nama,
           "",
-          "",
+          kecamatanPPL,
           "",
           ppl.target || 0,
           ppl.sudahKeLapangan || 0,
@@ -853,22 +861,20 @@ const ProgressPetugas = ({
           ppl.approve || 0,
         ]);
 
-        // Baris SLS milik PPL ini
-        slsArr
-          .filter((s) => s.ppl_id === ppl.id)
-          .forEach((sls) => {
-            rows.push([
-              "SLS",
-              "",
-              sls.kode_sls,
-              sls.kecamatan || "",
-              sls.kelurahan || "",
-              sls.target || 0,
-              sls.sudahKeLapangan ?? "",
-              sls.submit ?? "",
-              sls.approve ?? "",
-            ]);
-          });
+        // Baris SLS milik PPL ini (detail per SLS)
+        slsMilikPPL.forEach((sls) => {
+          rows.push([
+            "SLS",
+            "",
+            sls.kode_sls,
+            sls.kecamatan || "",
+            sls.kelurahan || "",
+            sls.target || 0,
+            sls.sudahKeLapangan ?? "",
+            sls.submit ?? "",
+            sls.approve ?? "",
+          ]);
+        });
       });
     });
 

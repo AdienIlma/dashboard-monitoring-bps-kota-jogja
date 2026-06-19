@@ -203,4 +203,27 @@ const hapusInput = async (req, res) => {
   }
 };
 
-module.exports = { getMyInputs, inputHarian, kirimLokasi, editInput, hapusInput };
+// ─── 6. AMBIL WILAYAH MILIK PPL (dengan total progress) ───────────────────
+
+const getWilayahPPL = async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT
+         w.*,
+         COALESCE(SUM(i.ke_lapangan), 0) AS total_lapangan,
+         COALESCE(SUM(i.submit),      0) AS total_submit
+       FROM wilayah w
+       JOIN user_sls us ON us.wilayah_id = w.id
+       LEFT JOIN input_harian i ON i.wilayah_id = w.id
+       WHERE us.user_id = ?
+       GROUP BY w.id
+       ORDER BY w.kecamatan, w.kelurahan`,
+      [req.user.id]
+    );
+    return res.json(rows);
+  } catch (err) {
+    return handleError(res, err, 'Gagal ambil wilayah PPL');
+  }
+};
+
+module.exports = { getMyInputs, inputHarian, kirimLokasi, editInput, hapusInput, getWilayahPPL };
