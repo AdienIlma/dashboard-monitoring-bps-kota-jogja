@@ -478,6 +478,7 @@ function ViewerDashboard() {
   const [petugasHarianData, setPetugasHarianData] = useState([]);
   const [wilayahList, setWilayahList] = useState([]);
   const [wilayahHarianList, setWilayahHarianList] = useState([]);
+  const [showNavbar, setShowNavbar] = useState(false);
 
   const stableLogout = useCallback(() => logout(), [logout]);
 
@@ -542,7 +543,27 @@ function ViewerDashboard() {
         overflow: "hidden",
       }}
     >
-      <div style={{ ...navStyles.nav, transform: "translateY(0)" }}>
+      {/* Strip pemicu hover di paling atas */}
+      <div
+        onMouseEnter={() => setShowNavbar(true)}
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 8,
+          zIndex: 9999,
+        }}
+      />
+
+      {/* Navbar yang muncul/hilang */}
+      <div
+        style={{
+          ...navStyles.nav,
+          transform: showNavbar ? "translateY(0)" : "translateY(-100%)",
+        }}
+        onMouseLeave={() => setShowNavbar(false)}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <img
             src="/logo-sensus.png"
