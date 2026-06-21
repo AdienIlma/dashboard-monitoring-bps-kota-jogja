@@ -9,7 +9,7 @@ CREATE TABLE users (
 
   password VARCHAR(255) NOT NULL,
 
-  role ENUM('admin','pml','ppl') NOT NULL,
+  role ENUM('admin','pml','ppl', 'viewer') NOT NULL,
 
   pml_id INT NULL,
 

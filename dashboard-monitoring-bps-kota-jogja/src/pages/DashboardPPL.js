@@ -49,7 +49,6 @@ const DashboardPPL = () => {
 
   useEffect(() => {
     fetchAll();
-
   }, []);
 
   const fetchAll = async () => {
@@ -66,7 +65,6 @@ const DashboardPPL = () => {
       setLoading(false);
     }
   };
-
 
   const kirimLokasiManual = () => {
     if (!navigator.geolocation) {
@@ -93,26 +91,17 @@ const DashboardPPL = () => {
         setLokasiStatus("error");
         setTimeout(() => setLokasiStatus("idle"), 3000);
       },
-      { timeout: 10000 }
+      { timeout: 10000 },
     );
   };
 
-const isSLSPenuh = (w) => {
-  if (!w.target || parseInt(w.target) <= 0) return false;
-  const target = parseInt(w.target);
-  if (activeMenu === "lapangan") return parseInt(w.total_lapangan || 0) >= target;
-  if (activeMenu === "submit")   return parseInt(w.total_submit   || 0) >= target;
-  return false;
-};
-
-const getProgres = (w) => {
-  if (activeMenu === "lapangan") return parseInt(w.total_lapangan || 0);
-  if (activeMenu === "submit")   return parseInt(w.total_submit   || 0);
-  return 0;
-};
+  const getProgres = (w) => {
+    if (activeMenu === "lapangan") return parseInt(w.total_lapangan || 0);
+    if (activeMenu === "submit") return parseInt(w.total_submit || 0);
+    return 0;
+  };
 
   const handlePilihSLS = (w) => {
-    if (isSLSPenuh(w)) return;
     setSelectedSLS(w);
     setForm((f) => ({ ...f, wilayah_id: w.id }));
     setSlsOpen(false);
@@ -274,9 +263,11 @@ const getProgres = (w) => {
             disabled={lokasiStatus === "loading"}
             style={{
               backgroundColor:
-                lokasiStatus === "success" ? "#1D9E75"
-                : lokasiStatus === "error" ? "#DC2626"
-                : "transparent",
+                lokasiStatus === "success"
+                  ? "#1D9E75"
+                  : lokasiStatus === "error"
+                    ? "#DC2626"
+                    : "transparent",
               border: "1px solid rgba(255,255,255,0.2)",
               color: "rgba(255,255,255,0.9)",
               padding: "6px 12px",
@@ -290,11 +281,26 @@ const getProgres = (w) => {
               transition: "all 0.2s",
             }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <circle cx="12" cy="10" r="3" />
               <path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 14-8 14S4 15.25 4 10a8 8 0 0 1 8-8z" />
             </svg>
-            {lokasiStatus === "loading" ? "..." : lokasiStatus === "success" ? "Terkirim ✓" : lokasiStatus === "error" ? "Gagal ✗" : "Kirim Lokasi"}
+            {lokasiStatus === "loading"
+              ? "..."
+              : lokasiStatus === "success"
+                ? "Terkirim ✓"
+                : lokasiStatus === "error"
+                  ? "Gagal ✗"
+                  : "Kirim Lokasi"}
           </button>
           <button style={styles.logoutBtn} onClick={logout}>
             Keluar
@@ -476,7 +482,6 @@ const getProgres = (w) => {
                   <div style={styles.slsEmpty}>Tidak ada SLS tersedia</div>
                 ) : (
                   wilayah.map((w) => {
-                    const penuh = isSLSPenuh(w);
                     const progres = getProgres(w);
                     const target = parseInt(w.target || 0);
                     const pct =
@@ -487,18 +492,12 @@ const getProgres = (w) => {
                         onClick={() => handlePilihSLS(w)}
                         style={{
                           ...styles.slsOption,
-                          backgroundColor: penuh
-                            ? "#FFF8F8"
-                            : form.wilayah_id === w.id
-                              ? "#F0F4FF"
-                              : "white",
-                          borderLeft: penuh
-                            ? "3px solid #FECACA"
-                            : form.wilayah_id === w.id
+                          backgroundColor:
+                            form.wilayah_id === w.id ? "#F0F4FF" : "white",
+                          borderLeft:
+                            form.wilayah_id === w.id
                               ? `3px solid ${activeColor}`
                               : "3px solid transparent",
-                          opacity: penuh ? 0.75 : 1,
-                          cursor: penuh ? "not-allowed" : "pointer",
                         }}
                       >
                         <div
@@ -512,15 +511,6 @@ const getProgres = (w) => {
                           <span style={styles.slsKode}>
                             {w.kode_sls || "—"}
                           </span>
-                          {penuh ? (
-                            <span style={styles.badgePenuh}>
-                              ✓ Target Terpenuhi
-                            </span>
-                          ) : target > 0 ? (
-                            <span style={styles.badgeProgres}>
-                              {progres}/{target}
-                            </span>
-                          ) : null}
                         </div>
                         <div style={styles.slsNama}>
                           {w.kelurahan}
@@ -532,9 +522,7 @@ const getProgres = (w) => {
                               style={{
                                 ...styles.progressBar,
                                 width: `${pct}%`,
-                                backgroundColor: penuh
-                                  ? "#EF4444"
-                                  : activeColor,
+                                backgroundColor: activeColor,
                               }}
                             />
                           </div>

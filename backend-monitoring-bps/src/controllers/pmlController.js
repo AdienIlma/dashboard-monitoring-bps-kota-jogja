@@ -93,8 +93,8 @@ const getWilayahByPPL = async (req, res) => {
       return res.status(403).json({ message: "PPL tidak di bawah anda" });
     }
 
-        const [rows] = await pool.query(
-  `SELECT
+    const [rows] = await pool.query(
+      `SELECT
      w.id, w.kode_sls, w.kelurahan, w.kecamatan, w.target,
      COALESCE(SUM(CASE WHEN i.ke_lapangan > 0 THEN i.ke_lapangan ELSE 0 END), 0) AS total_lapangan,
      COALESCE(SUM(CASE WHEN i.submit > 0 THEN i.submit ELSE 0 END), 0) AS total_submit,
@@ -105,8 +105,8 @@ const getWilayahByPPL = async (req, res) => {
    WHERE w.ppl_id = ? OR us.user_id = ?
    GROUP BY w.id, w.kode_sls, w.kelurahan, w.kecamatan, w.target
    ORDER BY w.kelurahan`,
-  [ppl_id, ppl_id, ppl_id, ppl_id],
-);
+      [ppl_id, ppl_id, ppl_id, ppl_id],
+    );
 
     return res.json(rows);
   } catch (err) {
@@ -131,8 +131,15 @@ const simpanApprove = async (req, res) => {
   if (!wilayah_id || isNaN(wilayah_id)) {
     return res.status(400).json({ message: "wilayah_id tidak valid" });
   }
-  if (!approve || isNaN(approve) || approve <= 0 || !Number.isInteger(approve)) {
-    return res.status(400).json({ message: "Jumlah approve harus bilangan bulat positif" });
+  if (
+    !approve ||
+    isNaN(approve) ||
+    approve <= 0 ||
+    !Number.isInteger(approve)
+  ) {
+    return res
+      .status(400)
+      .json({ message: "Jumlah approve harus bilangan bulat positif" });
   }
 
   try {
@@ -164,19 +171,15 @@ const simpanApprove = async (req, res) => {
         [ppl_id, wilayah_id, existing[0].id],
       );
 
-      const sisa = parseInt(progresRows[0].total_submit) - parseInt(progresRows[0].total_approve);
-      if (approve > sisa) {
-        return res.status(400).json({
-          message: `Jumlah melebihi sisa yang bisa di-approve. Sisa: ${sisa}`,
-        });
-      }
-
       await pool.query(
         `UPDATE input_harian SET approve = ?, catatan = ? WHERE id = ?`,
         [approve, catatan, existing[0].id],
       );
 
-      return res.json({ message: "Approve berhasil diperbarui", action: "update" });
+      return res.json({
+        message: "Approve berhasil diperbarui",
+        action: "update",
+      });
     } else {
       // Insert baru — cek sisa normal
       const [progresRows] = await pool.query(
@@ -188,13 +191,6 @@ const simpanApprove = async (req, res) => {
         [ppl_id, wilayah_id],
       );
 
-      const sisa = parseInt(progresRows[0].total_submit) - parseInt(progresRows[0].total_approve);
-      if (approve > sisa) {
-        return res.status(400).json({
-          message: `Jumlah melebihi sisa yang bisa di-approve. Sisa: ${sisa}`,
-        });
-      }
-
       await pool.query(
         `INSERT INTO input_harian
            (ppl_id, wilayah_id, ke_lapangan, submit, approve, catatan, tanggal)
@@ -202,7 +198,10 @@ const simpanApprove = async (req, res) => {
         [ppl_id, wilayah_id, approve, catatan, tglTarget],
       );
 
-      return res.json({ message: "Approve berhasil disimpan", action: "insert" });
+      return res.json({
+        message: "Approve berhasil disimpan",
+        action: "insert",
+      });
     }
   } catch (err) {
     return handleError(res, err, "Gagal menyimpan approve");
@@ -311,12 +310,6 @@ const editApprove = async (req, res) => {
     const totalSubmit = parseInt(progresRows[0].total_submit);
     const totalApprove = parseInt(progresRows[0].total_approve);
     const sisa = totalSubmit - totalApprove;
-
-    if (approve > sisa) {
-      return res.status(400).json({
-        message: `Jumlah melebihi sisa yang bisa di-approve. Sisa: ${sisa}`,
-      });
-    }
 
     await pool.query(
       `UPDATE input_harian SET approve = ?, catatan = ? WHERE id = ?`,

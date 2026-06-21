@@ -463,6 +463,155 @@ function AdminDashboard() {
   );
 }
 
+// ─── Dashboard Viewer (read-only, cuma monitor) ───────────────
+function ViewerDashboard() {
+  const { user, logout } = useAuth();
+  const [petugasData, setPetugasData] = useState(null);
+  const [progressData, setProgressData] = useState(null);
+  const [kecamatanData, setKecamatanData] = useState([]);
+  const [kecamatanHarianData, setKecamatanHarianData] = useState([]);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+  const [tanggalHarian, setTanggalHarian] = useState(yesterday);
+  const [progress15HariData, setProgress15HariData] = useState([]);
+  const [petugasDetailData, setPetugasDetailData] = useState([]);
+  const [error, setError] = useState("");
+  const [petugasHarianData, setPetugasHarianData] = useState([]);
+  const [wilayahList, setWilayahList] = useState([]);
+  const [wilayahHarianList, setWilayahHarianList] = useState([]);
+
+  const stableLogout = useCallback(() => logout(), [logout]);
+
+  useEffect(() => {
+    const fetchHarian = async () => {
+      try {
+        const [harianKecamatan, harianPetugas, detailTotal, wilayahHarian] =
+          await Promise.all([
+            getKecamatanHarianData(tanggalHarian),
+            getPetugasDetailHarian(tanggalHarian),
+            getPetugasDetail(),
+            getWilayahHarianData(tanggalHarian),
+          ]);
+        setKecamatanHarianData(harianKecamatan);
+        setPetugasHarianData(harianPetugas);
+        setPetugasDetailData(detailTotal);
+        setWilayahHarianList(wilayahHarian);
+      } catch (err) {
+        console.error("Gagal fetch harian:", err);
+      }
+    };
+    fetchHarian();
+    const interval = setInterval(fetchHarian, 60000);
+    return () => clearInterval(interval);
+  }, [tanggalHarian]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [petugas, progress, kecamatan, progress15, wilayah] =
+          await Promise.all([
+            getPetugasData(),
+            getProgressData(),
+            getKecamatanData(),
+            getProgress15Hari(),
+            getWilayahData(),
+          ]);
+        setPetugasData(petugas);
+        setProgressData(progress);
+        setKecamatanData(kecamatan);
+        setProgress15HariData(progress15);
+        setWilayahList(wilayah);
+      } catch (err) {
+        if (err.response?.status === 401) {
+          stableLogout();
+        } else {
+          setError("Gagal memuat data dashboard");
+        }
+      }
+    };
+    fetchData();
+    const interval = setInterval(fetchData, 60000);
+    return () => clearInterval(interval);
+  }, [stableLogout]);
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ ...navStyles.nav, transform: "translateY(0)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <img
+            src="/logo-sensus.png"
+            alt="Logo"
+            style={{ width: 28, height: 28, objectFit: "contain" }}
+          />
+          <div
+            style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}
+          >
+            <span style={navStyles.brandName}>SEMAKI</span>
+            <span style={navStyles.brandSub}>
+              Sensus Ekonomi Manajemen Aktivitas dan Kinerja
+            </span>
+          </div>
+        </div>
+        <div style={navStyles.right}>
+          <span style={navStyles.nama}>👤 {user?.nama}</span>
+          <button style={navStyles.logoutBtn} onClick={stableLogout}>
+            Logout
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div
+          style={{
+            backgroundColor: "#fee2e2",
+            color: "#dc2626",
+            padding: "10px",
+            textAlign: "center",
+            fontSize: 13,
+          }}
+        >
+          ⚠️ {error}
+        </div>
+      )}
+
+      <div className="dashboard">
+        <div className="left">
+          <ProgressPendataan data={progressData} />
+          <TabelPendataan
+            kecamatanData={kecamatanData}
+            kecamatanHarianData={kecamatanHarianData}
+            tanggalHarian={tanggalHarian}
+            onTanggalChange={setTanggalHarian}
+          />
+        </div>
+        <div className="center">
+          <PetugasLapangan data={petugasData} />
+          <div className="peta-wrapper">
+            <PetaSebaranPetugas wilayahData={wilayahList} />
+          </div>
+          <Progress15Hari data={progress15HariData} />
+        </div>
+        <div className="right">
+          <ProgressPetugas
+            petugasDetailData={petugasDetailData}
+            petugasHarianData={petugasHarianData}
+            tanggalHarian={tanggalHarian}
+            onTanggalChange={setTanggalHarian}
+            wilayahData={wilayahList}
+            wilayahHarianData={wilayahHarianList}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const navStyles = {
   nav: {
     position: "fixed",
@@ -696,6 +845,14 @@ function AppRoutes() {
         element={
           <PrivateRoute role="admin">
             <AdminDashboard />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/viewer"
+        element={
+          <PrivateRoute role="viewer">
+            <ViewerDashboard />
           </PrivateRoute>
         }
       />

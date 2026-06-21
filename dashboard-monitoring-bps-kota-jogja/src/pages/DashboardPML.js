@@ -34,6 +34,7 @@ const DashboardPML = () => {
   const [filterSLS, setFilterSLS] = useState({}); // { ppl_id: wilayah_id }
   const [perPage, setPerPage] = useState({}); // { ppl_id: 10 }
   const [halaman, setHalaman] = useState({});
+  const [errorPPL, setErrorPPL] = useState("");
 
   useEffect(() => {
     fetchPPL();
@@ -41,10 +42,12 @@ const DashboardPML = () => {
 
   const fetchPPL = async () => {
     try {
+      setErrorPPL("");
       const res = await api.get("/pml/ppl");
       setPplList(res.data);
     } catch (err) {
       console.error("Gagal fetch PPL", err);
+      setErrorPPL("Gagal memuat daftar PPL. Coba muat ulang.");
     } finally {
       setLoading(false);
     }
@@ -148,18 +151,6 @@ const DashboardPML = () => {
       setPesan((prev) => ({
         ...prev,
         [ppl_id]: { text: "Jumlah harus lebih dari 0!", type: "error" },
-      }));
-      return;
-    }
-    const sisa =
-      parseInt(sls.total_submit || 0) - parseInt(sls.total_approve || 0);
-    if (jumlah > sisa) {
-      setPesan((prev) => ({
-        ...prev,
-        [ppl_id]: {
-          text: `Melebihi sisa approve! Sisa: ${sisa}`,
-          type: "error",
-        },
       }));
       return;
     }
@@ -397,11 +388,7 @@ const DashboardPML = () => {
 
             const isHariIniHijau = cekTanggalTerisi(pplInputs, tglTerpilih);
 
-            const slsBisaApprove = wilayahList.filter(
-              (w) =>
-                parseInt(w.total_submit || 0) - parseInt(w.total_approve || 0) >
-                0,
-            );
+            const slsBisaApprove = wilayahList;
 
             return (
               <div key={ppl.id} style={{ marginBottom: 8 }}>
@@ -607,9 +594,6 @@ const DashboardPML = () => {
                                               </span>
                                             </div>
                                           </div>
-                                          <span style={styles.badgeProgres}>
-                                            Sisa: {sisa}
-                                          </span>
                                         </div>
                                         <div style={styles.progressWrap}>
                                           <div
@@ -732,12 +716,6 @@ const DashboardPML = () => {
                             <input
                               type="number"
                               min="1"
-                              max={
-                                slsSelected
-                                  ? parseInt(slsSelected.total_submit || 0) -
-                                    parseInt(slsSelected.total_approve || 0)
-                                  : undefined
-                              }
                               placeholder="Masukkan jumlah..."
                               value={jumlahApprove[ppl.id] || ""}
                               onChange={(e) =>
