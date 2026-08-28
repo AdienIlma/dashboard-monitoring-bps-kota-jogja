@@ -16,7 +16,13 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 
 app.use(
   require("cors")({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      if (!origin || origin.startsWith("http://localhost") || origin.startsWith("http://127.0.0.1") || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, true);
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "x-session-token"],
     credentials: true,

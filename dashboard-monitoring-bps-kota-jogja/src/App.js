@@ -45,7 +45,7 @@ function LoginPage() {
     setError("");
     try {
       const res = await axios.post(
-        "https://api.semaki.my.id/api/auth/login",
+        "http://localhost:5000/api/auth/login",
         { username, password },
         { headers: { "Content-Type": "application/json" } },
       );

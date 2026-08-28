@@ -6,6 +6,31 @@ const multer = require("multer");
 // Multer: simpan file sementara di memory
 const upload = multer({ storage: multer.memoryStorage() });
 
+const formatJakartaDate = (date = new Date()) => {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  const parts = formatter.formatToParts(date);
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
+
+  return `${year}-${month}-${day}`;
+};
+
+const normalizeDateInput = (dateValue) => {
+  if (!dateValue) return formatJakartaDate();
+  if (typeof dateValue === "string") {
+    const plain = dateValue.split("T")[0];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(plain)) return plain;
+  }
+  return formatJakartaDate(new Date(dateValue));
+};
+
 const syncWilayahPplId = async (pool, userId, wilayahIds) => {
   // 1. Reset semua wilayah yang sebelumnya milik user ini
   await pool.query(`UPDATE wilayah SET ppl_id = NULL WHERE ppl_id = ?`, [
@@ -635,8 +660,7 @@ ORDER BY w.kecamatan, w.kelurahan
 const getDashboardKecamatanHarian = async (req, res) => {
   try {
     const { tanggal } = req.query;
-    const targetDate =
-      tanggal || new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    const targetDate = normalizeDateInput(tanggal || new Date());
 
     const [rows] = await pool.query(
       `
@@ -898,8 +922,7 @@ const getWilayah = async (req, res) => {
 const getWilayahHarian = async (req, res) => {
   try {
     const { tanggal } = req.query;
-    const targetDate =
-      tanggal || new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    const targetDate = normalizeDateInput(tanggal || new Date());
 
     const [rows] = await pool.query(
       `

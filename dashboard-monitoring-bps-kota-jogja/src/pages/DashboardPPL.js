@@ -13,6 +13,12 @@ const getToday = () => {
   return local.toISOString().split("T")[0];
 };
 
+const formatDateOnly = (value, options) => {
+  const [year, month, day] = String(value || "").slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return "-";
+  return new Date(year, month - 1, day).toLocaleDateString("id-ID", options);
+};
+
 const DashboardPPL = () => {
   const { user, logout } = useAuth();
   const [activeMenu, setActiveMenu] = useState("lapangan");
@@ -805,7 +811,7 @@ const DashboardPPL = () => {
                           {i.kelurahan}, {i.kecamatan}
                         </div>
                         <div style={styles.inputDate}>
-                          {new Date(i.tanggal).toLocaleDateString("id-ID", {
+                          {formatDateOnly(i.tanggal, {
                             day: "numeric",
                             month: "long",
                             year: "numeric",

@@ -2,6 +2,31 @@ const pool = require('../config/db');
 
 const isDev = process.env.NODE_ENV !== 'production';
 
+const formatJakartaDate = (date = new Date()) => {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  const parts = formatter.formatToParts(date);
+  const year = parts.find((p) => p.type === 'year')?.value;
+  const month = parts.find((p) => p.type === 'month')?.value;
+  const day = parts.find((p) => p.type === 'day')?.value;
+
+  return `${year}-${month}-${day}`;
+};
+
+const normalizeDateInput = (dateValue) => {
+  if (!dateValue) return formatJakartaDate();
+  if (typeof dateValue === 'string') {
+    const plain = dateValue.split('T')[0];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(plain)) return plain;
+  }
+  return formatJakartaDate(new Date(dateValue));
+};
+
 // ─── Helper ────────────────────────────────────────────────────────────────
 
 const handleError = (res, err, message = 'Terjadi kesalahan server') => {
@@ -19,7 +44,8 @@ const getMyInputs = async (req, res) => {
     const [rows] = await pool.query(
       `SELECT
          i.id, i.wilayah_id, i.ke_lapangan, i.submit, i.approve,
-         i.catatan, i.tanggal, i.pml_hadir, i.created_at,
+            i.catatan, DATE_FORMAT(i.tanggal, '%Y-%m-%d') AS tanggal,
+            i.pml_hadir, i.created_at,
          w.kecamatan, w.kelurahan, w.kode_sls
        FROM input_harian i
        JOIN wilayah w ON i.wilayah_id = w.id
@@ -50,7 +76,7 @@ const inputHarian = async (req, res) => {
     return res.status(400).json({ message: 'Minimal satu data harus diisi' });
   }
 
-  const tgl        = tanggal || new Date().toISOString().split('T')[0];
+  const tgl        = normalizeDateInput(tanggal);
   const isPmlHadir = pml_hadir === true || pml_hadir === 'true';
 
   try {

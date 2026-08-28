@@ -319,6 +319,81 @@ const KelolaPetugas = () => {
     XLSX.writeFile(wb, 'template_petugas.xlsx');
   };
 
+  const handleExportExcel = () => {
+  const rows = [];
+
+  users.forEach((u) => {
+    if (u.role === 'admin') {
+      rows.push({
+        Nama: u.nama,
+        Role: u.role.toUpperCase(),
+        Email: u.email,
+        'No. WhatsApp': u.nomor_whatsapp ? `+62${u.nomor_whatsapp.replace(/^0/, '')}` : '',
+        'Kode SLS': '',
+        Kelurahan: '',
+        Kecamatan: '',
+        Target: '',
+      });
+    } else if (u.role === 'pml') {
+      rows.push({
+        Nama: u.nama,
+        Role: u.role.toUpperCase(),
+        Email: u.email,
+        'No. WhatsApp': u.nomor_whatsapp ? `+62${u.nomor_whatsapp.replace(/^0/, '')}` : '',
+        'Kode SLS': '',
+        Kelurahan: '',
+        Kecamatan: '',
+        Target: '',
+      });
+    } else if (u.role === 'ppl') {
+  const wilayahUser = Array.isArray(u.wilayah_ids) ? u.wilayah_ids : [];
+  const pmlUser  = u.pml_id ? users.find((p) => p.id === u.pml_id) : null;  // ← fix
+  const pmlNama  = pmlUser?.nama  || '';
+  const pmlEmail = pmlUser?.email || '';
+
+  if (wilayahUser.length === 0)  {
+        rows.push({
+          Nama: u.nama,
+          Role: u.role.toUpperCase(),
+          Email: u.email,
+          'No. WhatsApp': u.nomor_whatsapp ? `+62${u.nomor_whatsapp.replace(/^0/, '')}` : '',
+          'PML Atasan': pmlNama,
+          'Email PML': pmlEmail, 
+          'Kode SLS': '',
+          Kelurahan: '',
+          Kecamatan: '',
+          Target: '',
+        });
+      } else {
+        wilayahUser.forEach((wid) => {
+  const w = wilayahList.find((x) => x.id === wid);
+  rows.push({
+    Nama: u.nama,
+    Role: 'PPL',
+    Email: u.email,
+    'No. WhatsApp': u.nomor_whatsapp ? `+62${u.nomor_whatsapp.replace(/^0/, '')}` : '',
+    'PML Atasan': pmlNama,
+    'Email PML': pmlEmail, 
+    'Kode SLS': w?.kode_sls || '',
+    Kelurahan: w?.kelurahan || '',
+    Kecamatan: w?.kecamatan || '',
+    Target: w ? Number(w.target || 0) : '',
+  });
+});
+      }
+    }
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [
+  { wch: 22 }, { wch: 8 }, { wch: 28 }, { wch: 18 },
+  { wch: 22 }, { wch: 28 }, { wch: 12 }, { wch: 20 }, { wch: 20 }, { wch: 8 },
+];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Data Petugas');
+  XLSX.writeFile(wb, 'data_petugas.xlsx');
+};
+
   const handleAddSls = async (userId) => {
     if (!selectedSlsId) return; setSlsLoading(true);
     try {
@@ -658,6 +733,7 @@ const KelolaPetugas = () => {
             {importLoading ? '⏳ Mengimpor…' : '📥 Import Excel'}
           </button>
           <button className="btn btn-ghost" onClick={handleDownloadTemplate}>📄 Template</button>
+          <button className="btn btn-ghost" onClick={handleExportExcel}>Export Excel</button>
           <button className="btn btn-primary" onClick={() => showForm ? resetForm() : setShowForm(true)}>
             {showForm ? '✕ Batal' : '+ Tambah Petugas'}
           </button>

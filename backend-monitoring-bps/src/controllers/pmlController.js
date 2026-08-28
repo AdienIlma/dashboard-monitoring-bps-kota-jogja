@@ -2,6 +2,31 @@ const pool = require("../config/db");
 
 const isDev = process.env.NODE_ENV !== "production";
 
+const formatJakartaDate = (date = new Date()) => {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  const parts = formatter.formatToParts(date);
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
+
+  return `${year}-${month}-${day}`;
+};
+
+const normalizeDateInput = (dateValue) => {
+  if (!dateValue) return formatJakartaDate();
+  if (typeof dateValue === "string") {
+    const plain = dateValue.split("T")[0];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(plain)) return plain;
+  }
+  return formatJakartaDate(new Date(dateValue));
+};
+
 // ─── Helper ────────────────────────────────────────────────────────────────
 
 const cekKepemilikanPPL = async (ppl_id, pml_id) => {
@@ -63,7 +88,8 @@ const getInputsByPPL = async (req, res) => {
     const [rows] = await pool.query(
       `SELECT
          i.id, i.wilayah_id, i.ke_lapangan, i.submit, i.approve,
-         i.catatan, i.tanggal, i.pml_hadir, i.created_at,
+         i.catatan, DATE_FORMAT(i.tanggal, '%Y-%m-%d') AS tanggal, i.pml_hadir,
+         DATE_FORMAT(i.created_at, '%Y-%m-%dT%H:%i:%s') AS created_at,
          w.kecamatan, w.kelurahan
        FROM input_harian i
        JOIN wilayah w ON i.wilayah_id = w.id
@@ -149,7 +175,7 @@ const simpanApprove = async (req, res) => {
     }
 
     // Cek apakah sudah ada approve di tanggal + wilayah yang sama
-    const tglTarget = tanggal || new Date().toISOString().split("T")[0];
+    const tglTarget = normalizeDateInput(tanggal);
     const [existing] = await pool.query(
       `SELECT id, approve AS approve_lama
        FROM input_harian

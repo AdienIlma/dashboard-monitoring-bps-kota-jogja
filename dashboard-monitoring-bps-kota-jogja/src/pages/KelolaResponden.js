@@ -64,7 +64,7 @@ const GLOBAL_CSS = `
   .wr-spacer  { flex: 1; }
   .wr-btn-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
-  /* ── Search ── */
+  /* ── Search ''mcknwnv */
   .wr-search { position: relative; }
   .wr-search input { padding: 8px 12px 8px 34px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; font-family: var(--font); background: var(--white); color: #1e293b; outline: none; width: 220px; transition: var(--trans); }
   .wr-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,124,244,.12); }
