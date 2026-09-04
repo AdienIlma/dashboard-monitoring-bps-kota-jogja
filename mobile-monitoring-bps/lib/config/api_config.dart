@@ -1,14 +1,5 @@
-import 'package:flutter/foundation.dart';
-
 class ApiConfig {
-  // 10.0.2.2 digunakan untuk Android Emulator mengakses localhost komputer
-  // http://localhost:5000/api digunakan untuk Web / Windows Desktop
-  static String get baseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:5000/api';
-    }
-    return 'http://10.0.2.2:5000/api';
-  }
+  static const String baseUrl = 'https://api.semaki.my.id/api';
 
   static String get loginUrl => '$baseUrl/auth/login';
 

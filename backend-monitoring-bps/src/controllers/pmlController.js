@@ -176,6 +176,10 @@ const simpanApprove = async (req, res) => {
 
     // Cek apakah sudah ada approve di tanggal + wilayah yang sama
     const tglTarget = normalizeDateInput(tanggal);
+    const todayStr  = normalizeDateInput(new Date());
+    if (tglTarget > todayStr) {
+      return res.status(400).json({ message: 'Tanggal approve tidak boleh melebihi hari ini' });
+    }
     const [existing] = await pool.query(
       `SELECT id, approve AS approve_lama
        FROM input_harian

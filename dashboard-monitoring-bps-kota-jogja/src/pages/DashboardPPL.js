@@ -347,9 +347,9 @@ const DashboardPPL = () => {
             onClick={() => setSesi((s) => ({ ...s, pml_hadir: !s.pml_hadir }))}
             style={{
               display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "10px 12px",
+              alignItems: "flex-start",
+              gap: 12,
+              padding: "12px 14px",
               border: `1.5px solid ${sesi.pml_hadir ? "#1D9E75" : "#EBEEf2"}`,
               borderRadius: 8,
               backgroundColor: sesi.pml_hadir ? "#EDFAF4" : "#F7F8FA",
@@ -368,6 +368,7 @@ const DashboardPPL = () => {
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
+                marginTop: 2,
                 transition: "all 0.15s",
               }}
             >
@@ -388,6 +389,8 @@ const DashboardPPL = () => {
                 fontSize: 13,
                 color: sesi.pml_hadir ? "#1D9E75" : "#4A5568",
                 fontWeight: sesi.pml_hadir ? 600 : 400,
+                lineHeight: 1.4,
+                flex: 1,
               }}
             >
               {sesi.pml_hadir
@@ -831,7 +834,9 @@ const DashboardPPL = () => {
                         style={{
                           textAlign: "right",
                           flexShrink: 0,
-                          marginLeft: 8,
+                          marginLeft: 12,
+                          paddingLeft: 12,
+                          borderLeft: "1px solid #F0F2F5",
                         }}
                       >
                         <div
@@ -1059,7 +1064,7 @@ const styles = {
   container: {
     maxWidth: 480,
     margin: "0 auto",
-    padding: "1rem",
+    padding: "12px 14px",
     backgroundColor: "#F0F2F5",
     minHeight: "100vh",
   },
@@ -1071,6 +1076,7 @@ const styles = {
     padding: "14px 16px",
     borderRadius: 14,
     marginBottom: 14,
+    gap: 10,
   },
   headerLeft: { display: "flex", alignItems: "center", gap: 10 },
   avatar: {
@@ -1096,7 +1102,7 @@ const styles = {
     cursor: "pointer",
     fontSize: 12,
   },
-  statsRow: { display: "flex", gap: 10, marginBottom: 12 },
+  statsRow: { display: "flex", gap: 12, marginBottom: 14 },
   statCard: {
     flex: 1,
     backgroundColor: "white",
@@ -1114,7 +1120,7 @@ const styles = {
     textTransform: "uppercase",
     letterSpacing: "0.05em",
   },
-  menuRow: { display: "flex", gap: 8, marginBottom: 14 },
+  menuRow: { display: "flex", gap: 10, marginBottom: 14 },
   menuBtn: {
     flex: 1,
     padding: "9px 0",
@@ -1128,7 +1134,7 @@ const styles = {
   card: {
     backgroundColor: "white",
     borderRadius: 14,
-    padding: "16px",
+    padding: "18px 16px",
     marginBottom: 14,
     border: "1px solid #EBEEf2",
     boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
@@ -1150,17 +1156,17 @@ const styles = {
     fontSize: 13,
     fontWeight: 500,
   },
-  field: { marginBottom: 12 },
+  field: { marginBottom: 14 },
   label: {
     display: "block",
     fontSize: 12,
     fontWeight: 500,
     color: "#4A5568",
-    marginBottom: 5,
+    marginBottom: 6,
   },
   input: {
     width: "100%",
-    padding: "9px 12px",
+    padding: "10px 13px",
     border: "1px solid #EBEEf2",
     borderRadius: 8,
     fontSize: 13,
@@ -1205,7 +1211,7 @@ const styles = {
     overflowY: "auto",
   },
   slsOption: {
-    padding: "10px 14px",
+    padding: "12px 14px",
     borderBottom: "1px solid #F7F8FA",
     transition: "background 0.1s",
   },
@@ -1243,8 +1249,8 @@ const styles = {
   },
   progressBar: { height: "100%", borderRadius: 99, transition: "width 0.3s" },
   slsPreview: {
-    marginTop: 8,
-    padding: "8px 12px",
+    marginTop: 10,
+    padding: "10px 13px",
     backgroundColor: "#F7F8FA",
     borderRadius: 8,
     border: "1px solid #EBEEf2",
@@ -1262,11 +1268,16 @@ const styles = {
   inputItem: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
-    padding: "10px 0",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: "12px 0",
     borderBottom: "1px solid #F7F8FA",
   },
-  inputLeft: { flex: 1 },
+  inputLeft: { 
+    flex: 1,
+    minWidth: 0,
+    wordBreak: "break-word",
+  },
   inputKodeSLS: {
     fontSize: 9,
     fontWeight: 600,
@@ -1280,6 +1291,7 @@ const styles = {
     fontWeight: 500,
     color: "#2D3748",
     marginBottom: 3,
+    wordBreak: "break-word",
   },
   inputDate: { fontSize: 11, color: "#9AA5B4" },
   badgeApprove: {
@@ -1331,8 +1343,8 @@ const styles = {
     cursor: "pointer",
   },
   editBox: {
-    marginTop: 10,
-    padding: "12px",
+    marginTop: 12,
+    padding: "14px",
     backgroundColor: "#F7F8FA",
     borderRadius: 8,
     border: "1px solid #EBEEf2",

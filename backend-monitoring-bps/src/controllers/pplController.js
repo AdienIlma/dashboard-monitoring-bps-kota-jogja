@@ -77,6 +77,10 @@ const inputHarian = async (req, res) => {
   }
 
   const tgl        = normalizeDateInput(tanggal);
+  const todayStr   = normalizeDateInput(new Date());
+  if (tgl > todayStr) {
+    return res.status(400).json({ message: 'Tanggal input tidak boleh melebihi hari ini' });
+  }
   const isPmlHadir = pml_hadir === true || pml_hadir === 'true';
 
   try {

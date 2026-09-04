@@ -90,9 +90,22 @@ class _LoginPageState extends State<LoginPage> {
                   Center(
                     child: Column(
                       children: [
-                        Transform.rotate(
-                          angle: -0.35,
-                          child: const Icon(Icons.change_history, size: 52, color: Color(0xFFF3C978)),
+                         Image.asset(
+                          'assets/images/logo-sensus.png',
+                          width: 60,
+                          height: 60,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            // Fallback jika gambar tidak ditemukan
+                            return Transform.rotate(
+                              angle: -0.35,
+                              child: Icon(
+                                Icons.change_history,
+                                size: 52,
+                                color: const Color(0xFFF3C978),
+                              ),
+                            );
+                          },
                         ),
                         const SizedBox(height: 18),
                         const Text(

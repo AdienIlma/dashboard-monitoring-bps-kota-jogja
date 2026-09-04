@@ -32,7 +32,8 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
 
   int _pageSize = 5;
   int _currentPage = 0;
-  String? _selectedDateFilter;
+  String? _filterDateFrom;
+  String? _filterDateTo;
   int? _selectedSlsFilter;
   bool _historyExpanded = true;
 
@@ -114,10 +115,17 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
   List<dynamic> get _filteredInputs {
     List<dynamic> result = List.from(_inputs);
 
-    if (_selectedDateFilter != null && _selectedDateFilter!.isNotEmpty) {
+    if (_filterDateFrom != null && _filterDateFrom!.isNotEmpty) {
       result = result.where((item) {
         final itemDate = _normalizeDateInputValue(item['tanggal']);
-        return itemDate == _selectedDateFilter;
+        return itemDate.compareTo(_filterDateFrom!) >= 0;
+      }).toList();
+    }
+
+    if (_filterDateTo != null && _filterDateTo!.isNotEmpty) {
+      result = result.where((item) {
+        final itemDate = _normalizeDateInputValue(item['tanggal']);
+        return itemDate.compareTo(_filterDateTo!) <= 0;
       }).toList();
     }
 
@@ -130,7 +138,8 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
 
   void _resetFilters() {
     setState(() {
-      _selectedDateFilter = null;
+      _filterDateFrom = null;
+      _filterDateTo = null;
       _selectedSlsFilter = null;
       _currentPage = 0;
     });
@@ -182,6 +191,15 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
     if (tanggal == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Format tanggal tidak valid, gunakan dd/MM/yyyy')),
+      );
+      return;
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    if (tanggal.isAfter(today)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tanggal input tidak boleh melebihi hari ini')),
       );
       return;
     }
@@ -361,7 +379,7 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
         automaticallyImplyLeading: false,
         backgroundColor: const Color(0xFF0D3A63),
         elevation: 0,
-        toolbarHeight: 72,
+        toolbarHeight: 68,
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -374,24 +392,42 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                     color: Color(0xFFF57C00),
                     shape: BoxShape.circle,
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Text(
-                      'i',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 28),
+                      (_user?.nama != null && _user!.nama.isNotEmpty) ? _user!.nama[0].toLowerCase() : 'i',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  _user?.nama ?? 'Petugas PPL',
-                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+                const SizedBox(width: 10),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _user?.nama ?? 'ilma',
+                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 1),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'PPL',
+                        style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
             Row(
               children: [
-                TextButton.icon(
-                  onPressed: () async {
+                InkWell(
+                  onTap: () async {
                     final granted = await LocationService.startTracking();
                     if (!granted && mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -400,9 +436,17 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                     }
                     _checkTrackingStatus();
                   },
-                  style: TextButton.styleFrom(foregroundColor: Colors.white),
-                  icon: const Icon(Icons.location_on_outlined),
-                  label: const Text('Kirim Lokasi'),
+                  borderRadius: BorderRadius.circular(6),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                    child: Row(
+                      children: [
+                        Icon(Icons.location_on_outlined, size: 18, color: Colors.white),
+                        SizedBox(width: 4),
+                        Text('Kirim Lokasi', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 OutlinedButton(
@@ -410,8 +454,12 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.white,
                     side: const BorderSide(color: Colors.white70),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    minimumSize: const Size(0, 0),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                   ),
-                  child: const Text('Keluar'),
+                  child: const Text('Keluar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
                 ),
               ],
             ),
@@ -423,7 +471,7 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
           : RefreshIndicator(
               onRefresh: _loadData,
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 32),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -492,7 +540,7 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                     ),
                     const SizedBox(height: 18),
                     Container(
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(14),
@@ -506,11 +554,14 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                               controller: _dateController,
                               readOnly: true,
                               onTap: () async {
+                                final now = DateTime.now();
+                                final initial = _parseDate(_dateController.text);
+                                final safeInitial = (initial != null && !initial.isAfter(now)) ? initial : now;
                                 final picked = await showDatePicker(
                                   context: context,
-                                  initialDate: _parseDate(_dateController.text) ?? DateTime.now(),
+                                  initialDate: safeInitial,
                                   firstDate: DateTime(2020),
-                                  lastDate: DateTime(2100),
+                                  lastDate: now,
                                 );
                                 if (picked != null) {
                                   _dateController.text = DateFormat('dd/MM/yyyy').format(picked);
@@ -524,15 +575,16 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                                   borderRadius: BorderRadius.circular(10),
                                   borderSide: BorderSide.none,
                                 ),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                                 suffixIcon: const Icon(Icons.calendar_today_outlined, color: Color(0xFF0D3A63)),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 18),
                           _buildFieldRow(
                             label: 'Kunjungan PML',
                             child: Container(
-                              padding: const EdgeInsets.only(left: 10),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(10),
                                 color: const Color(0xFFF3F4F6),
@@ -540,9 +592,12 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                               child: CheckboxListTile(
                                 value: _pmlHadir,
                                 onChanged: (val) => setState(() => _pmlHadir = val ?? false),
-                                title: const Text('PML datang berkunjung hari ini?'),
+                                title: const Text(
+                                  'PML datang berkunjung hari ini?',
+                                  style: TextStyle(fontSize: 14),
+                                ),
                                 controlAffinity: ListTileControlAffinity.leading,
-                                contentPadding: EdgeInsets.zero,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                               ),
                             ),
                           ),
@@ -551,7 +606,7 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                     ),
                     const SizedBox(height: 18),
                     Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(14),
@@ -563,7 +618,7 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                             'Input Ke Lapangan',
                             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0D3A63)),
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 18),
                           DropdownButtonFormField<int>(
                             value: _selectedWilayahId,
                             decoration: InputDecoration(
@@ -574,6 +629,7 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                                 borderRadius: BorderRadius.circular(10),
                                 borderSide: BorderSide.none,
                               ),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                             ),
                             items: _wilayahList.map((w) {
                               return DropdownMenuItem<int>(
@@ -583,7 +639,7 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                             }).toList(),
                             onChanged: (val) => setState(() => _selectedWilayahId = val),
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 16),
                           Row(
                             children: [
                               Expanded(
@@ -598,10 +654,11 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                                       borderRadius: BorderRadius.circular(10),
                                       borderSide: BorderSide.none,
                                     ),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 14),
                               Expanded(
                                 child: TextField(
                                   controller: _submitController,
@@ -614,12 +671,13 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                                       borderRadius: BorderRadius.circular(10),
                                       borderSide: BorderSide.none,
                                     ),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                                   ),
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 16),
                           TextField(
                             controller: _catatanController,
                             minLines: 3,
@@ -632,9 +690,10 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                                 borderRadius: BorderRadius.circular(10),
                                 borderSide: BorderSide.none,
                               ),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             ),
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 18),
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
@@ -657,7 +716,7 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                     GestureDetector(
                       onTap: () => setState(() => _historyExpanded = !_historyExpanded),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(14),
@@ -670,7 +729,7 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0D3A63)),
                               ),
                             ),
-                            const Icon(Icons.keyboard_arrow_down, color: Color(0xFF0D3A63)),
+                            Icon(_historyExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: const Color(0xFF0D3A63)),
                           ],
                         ),
                       ),
@@ -678,13 +737,15 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                     const SizedBox(height: 8),
                     if (_historyExpanded) ...[
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF7F8FA),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Filter Tanggal: Dari - Sampai
                             Row(
                               children: [
                                 Expanded(
@@ -692,52 +753,128 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                                     onTap: () async {
                                       final picked = await showDatePicker(
                                         context: context,
-                                        initialDate: DateTime.now(),
+                                        initialDate: _filterDateFrom != null ? DateTime.parse(_filterDateFrom!) : DateTime.now(),
                                         firstDate: DateTime(2020),
                                         lastDate: DateTime(2100),
                                       );
                                       if (picked != null) {
                                         setState(() {
-                                          _selectedDateFilter = DateFormat('yyyy-MM-dd').format(picked);
+                                          _filterDateFrom = DateFormat('yyyy-MM-dd').format(picked);
                                           _currentPage = 0;
                                         });
                                       }
                                     },
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                       decoration: BoxDecoration(
                                         color: Colors.white,
-                                        borderRadius: BorderRadius.circular(10),
+                                        borderRadius: BorderRadius.circular(9),
+                                        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
                                       ),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            _selectedDateFilter == null ? 'Filter Tanggal' : _selectedDateFilter!,
-                                            style: const TextStyle(color: Colors.black87),
+                                          const Text(
+                                            'Dari',
+                                            style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF), fontWeight: FontWeight.w500),
                                           ),
-                                          const Icon(Icons.calendar_today_outlined, size: 18),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                _filterDateFrom ?? 'Pilih tanggal',
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  color: Color(0xFF1F2937),
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                              const Icon(Icons.calendar_today_outlined, size: 16, color: Color(0xFF0D3A63)),
+                                            ],
+                                          ),
                                         ],
                                       ),
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 8),
+                                const SizedBox(width: 10),
                                 Expanded(
+                                  child: GestureDetector(
+                                    onTap: () async {
+                                      final picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: _filterDateTo != null ? DateTime.parse(_filterDateTo!) : DateTime.now(),
+                                        firstDate: DateTime(2020),
+                                        lastDate: DateTime(2100),
+                                      );
+                                      if (picked != null) {
+                                        setState(() {
+                                          _filterDateTo = DateFormat('yyyy-MM-dd').format(picked);
+                                          _currentPage = 0;
+                                        });
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(9),
+                                        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Sampai',
+                                            style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF), fontWeight: FontWeight.w500),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                _filterDateTo ?? 'Pilih tanggal',
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  color: Color(0xFF1F2937),
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                              const Icon(Icons.calendar_today_outlined, size: 16, color: Color(0xFF0D3A63)),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            // Filter SLS dan Perpage
+                            Row(
+                              children: [
+                                Expanded(
+                                  flex: 2,
                                   child: DropdownButtonFormField<int>(
                                     value: _selectedSlsFilter,
                                     decoration: InputDecoration(
-                                      hintText: 'Filter SLS',
+                                      labelText: 'Filter SLS',
                                       filled: true,
                                       fillColor: Colors.white,
                                       border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                        borderSide: BorderSide.none,
+                                        borderRadius: BorderRadius.circular(9),
+                                        borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1),
                                       ),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                     ),
                                     items: [
                                       const DropdownMenuItem<int>(value: -1, child: Text('Semua SLS')),
-                                      ..._wilayahList.map((w) => DropdownMenuItem<int>(value: w['id'], child: Text(w['kode_sls'] ?? 'SLS'))),
+                                      ..._wilayahList.map((w) => DropdownMenuItem<int>(
+                                        value: w['id'],
+                                        child: Text(w['kode_sls'] ?? 'SLS'),
+                                      )),
                                     ],
                                     onChanged: (value) {
                                       setState(() {
@@ -747,12 +884,13 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                                     },
                                   ),
                                 ),
-                                const SizedBox(width: 8),
+                                const SizedBox(width: 10),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10),
                                   decoration: BoxDecoration(
                                     color: Colors.white,
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(9),
+                                    border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
                                   ),
                                   child: DropdownButton<int>(
                                     value: _pageSize,
@@ -771,16 +909,20 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 8),
-                            if (_selectedDateFilter != null || _selectedSlsFilter != null)
+                            const SizedBox(height: 10),
+                            if (_filterDateFrom != null || _filterDateTo != null || _selectedSlsFilter != null)
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: TextButton.icon(
                                   onPressed: _resetFilters,
-                                  icon: const Icon(Icons.refresh),
-                                  label: const Text('Reset Filter'),
+                                  icon: const Icon(Icons.refresh, size: 16),
+                                  label: const Text('Reset'),
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  ),
                                 ),
                               ),
+                            const SizedBox(height: 8),
                             if (_filteredInputs.isEmpty)
                               const Center(child: Padding(
                                 padding: EdgeInsets.symmetric(vertical: 24),
@@ -794,51 +936,71 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                                 separatorBuilder: (_, __) => const SizedBox(height: 8),
                                 itemBuilder: (context, index) {
                                   final item = _paginatedInputs[index];
-                                  final isLocked = (item['approve'] ?? 0) > 0;
+                                  final slsCode = item['kode_sls'] ?? '-';
+                                  final kelurahan = item['kelurahan'] ?? '-';
 
                                   return Container(
-                                    padding: const EdgeInsets.all(14),
+                                    padding: const EdgeInsets.all(13),
                                     decoration: BoxDecoration(
                                       color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
+                                      borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.center,
                                       children: [
                                         Expanded(
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Text(
-                                                '${item['kelurahan'] ?? '-'} • ${item['kode_sls'] ?? '-'}',
-                                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                                '$kelurahan-$slsCode',
+                                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                                               ),
-                                              const SizedBox(height: 5),
-                                              Text(
-                                                'Tanggal: ${_normalizeDateInputValue(item['tanggal'])} • Ke Lapangan: ${item['ke_lapangan'] ?? 0} • Submit: ${item['submit'] ?? 0}',
-                                                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                                              const SizedBox(height: 6),
+                                              RichText(
+                                                text: TextSpan(
+                                                  style: const TextStyle(fontSize: 13, color: Color(0xFF1F2937)),
+                                                  children: [
+                                                    const TextSpan(text: 'Ke lap : '),
+                                                    TextSpan(
+                                                      text: '${item['ke_lapangan'] ?? 0}',
+                                                      style: const TextStyle(fontWeight: FontWeight.w600),
+                                                    ),
+                                                    const TextSpan(text: '    submit: '),
+                                                    TextSpan(
+                                                      text: '${item['submit'] ?? 0}',
+                                                      style: const TextStyle(fontWeight: FontWeight.w600),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
                                               if ((item['catatan'] ?? '').toString().isNotEmpty)
                                                 Padding(
-                                                  padding: const EdgeInsets.only(top: 6),
+                                                  padding: const EdgeInsets.only(top: 5),
                                                   child: Text(
                                                     'Catatan: ${item['catatan']}',
-                                                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                                                    style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
                                                   ),
                                                 ),
                                             ],
                                           ),
                                         ),
+                                        const SizedBox(width: 12),
                                         Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             IconButton(
                                               icon: const Icon(Icons.edit_outlined, color: Color(0xFF0D3A63)),
-                                              onPressed: isLocked ? null : () => _showEditDialog(item),
+                                              onPressed: () => _showEditDialog(item),
+                                              iconSize: 18,
+                                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                              padding: EdgeInsets.zero,
                                             ),
                                             IconButton(
-                                              icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                              onPressed: isLocked ? null : () => _deleteInput(item),
+                                              icon: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
+                                              onPressed: () => _deleteInput(item),
+                                              iconSize: 18,
+                                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                              padding: EdgeInsets.zero,
                                             ),
                                           ],
                                         ),
@@ -847,24 +1009,25 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
                                   );
                                 },
                               ),
-                              const SizedBox(height: 10),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  TextButton(
-                                    onPressed: _currentPage == 0 ? null : () => setState(() => _currentPage--),
-                                    child: const Text('Sebelumnya'),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                                    child: Text('${_currentPage + 1} / $_pageCount'),
-                                  ),
-                                  TextButton(
-                                    onPressed: _currentPage >= _pageCount - 1 ? null : () => setState(() => _currentPage++),
-                                    child: const Text('Selanjutnya'),
-                                  ),
-                                ],
-                              ),
+                              const SizedBox(height: 12),
+                              if (_pageCount > 1)
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    TextButton(
+                                      onPressed: _currentPage == 0 ? null : () => setState(() => _currentPage--),
+                                      child: const Text('‹ Prev'),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                                      child: Text('${_currentPage + 1} / $_pageCount', style: const TextStyle(fontSize: 12)),
+                                    ),
+                                    TextButton(
+                                      onPressed: _currentPage >= _pageCount - 1 ? null : () => setState(() => _currentPage++),
+                                      child: const Text('Next ›'),
+                                    ),
+                                  ],
+                                ),
                             ],
                           ],
                         ),
@@ -915,9 +1078,9 @@ class _DashboardPPLPageState extends State<DashboardPPLPage> {
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFF0D3A63)),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF0D3A63)),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         child,
       ],
     );
